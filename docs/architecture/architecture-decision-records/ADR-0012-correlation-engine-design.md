@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0012 | correlation-engine-design | Proposed | Firm | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [correlation-and-intelligence.md](../correlation-and-intelligence.md)، [ADR-0011](ADR-0011-topology-model-and-dependency-discovery.md)، [ADR-0013](ADR-0013-analytics-staging-rules-statistics-ml.md)، [ADR-0019](ADR-0019-transaction-correlation-tiers.md)
 
 ## Context

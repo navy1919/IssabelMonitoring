@@ -3,11 +3,11 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `ARC-CTX-001` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (۱۴۰۵/۰۷/۱۹) |
 | Owner | `Architecture` |
-| Related documents | [container-architecture.md](container-architecture.md)، [data-architecture.md](data-architecture.md)، [ADR-0002](architecture-decision-records/ADR-0002-modular-monolith-with-edge-collectors.md)، [ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md)، [ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)، [ADR-0015](architecture-decision-records/ADR-0015-authentication-authorization-audit.md)، [ADR-0017](architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، [functional-requirements.md](../requirements/functional-requirements.md)، [non-functional-requirements.md](../requirements/non-functional-requirements.md)، [open-questions.md](../requirements/open-questions.md) |
+| Related documents | [container-architecture.md](container-architecture.md)، [data-architecture.md](data-architecture.md)، [ADR-0002](architecture-decision-records/ADR-0002-modular-monolith-with-edge-collectors.md)، [ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md)، [ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)، [ADR-0015](architecture-decision-records/ADR-0015-authentication-authorization-audit.md)، [ADR-0017](architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، [functional-requirements.md](../requirements/functional-requirements.md)، [non-functional-requirements.md](../requirements/non-functional-requirements.md)، [open-questions-and-assumptions.md](open-questions-and-assumptions.md)، [ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)، [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)، [product-benchmark.md](../benchmark/product-benchmark.md) |
 
 > **قرارداد برچسب‌گذاری:** [واقعیت] = واقعیت تأییدشده (فقط F-01..F-03 و نتایج مستقیم آن‌ها)؛ [فرض A-xx] = فرض موقت؛ [فرضیه] = فرضیهٔ نیازمند آزمایش (EXP/BM)؛ [توصیه] = پیشنهاد معماری؛ [باز Q-xx] = وابسته به پرسش باز.
 
@@ -20,7 +20,8 @@
 - [واقعیت] سامانه کاملاً on-premises، در دیتاسنتر بانک و بدون دسترسی مستقیم به اینترنت است (F-02).
 - [واقعیت] نقطهٔ شروع، استفاده از SolarWinds، Zabbix، Splunk و Elasticsearch موجود است؛ instrumentation مستقیم برنامه‌ها به فازهای بعد و بر اساس نیاز واقعی موکول شده است (F-02).
 - [توصیه] ابزارهای موجود **منبع شواهد** هستند، نه محصول. BSOIP جایگزین آن‌ها نمی‌شود و آن‌ها را بازپیکربندی نمی‌کند ([ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، NFR-IMP-002).
-- [توصیه] همهٔ اتصال‌ها به سامانه‌های منبع فقط از `connector-runtime` یا `edge-collector` مستقر در همان zone آغاز می‌شود و جهت ارتباط بین zoneها همواره «از zone منبع به سمت `monitoring-zone`» است (NFR-SEC-010).
+- [توصیه، 0.2] **بازاستفاده پیش از ساخت** ([ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)): ابزارهای موجود سامانهٔ مرجع دادهٔ خام، هشدار زیرساخت و سلامت زیرساخت می‌مانند. پلتفرم (۱) وضعیت سرویس و SLI را از سرویس‌ها/SLA در Zabbix می‌خواند (`service.get`، `sla.getsli` — [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)، PoC-1)؛ (۲) KPI تراکنش را از **saved search/aggregationهایی که درون Splunk/ES اجرا می‌شوند** می‌کشد — تعریف را پلتفرم تولید و مدیر منبع نصب می‌کند ([باز Q-28])؛ (۳) متریک IBM MQ را از exporter رسمی IBM `mq_prometheus` یا itemهای موجود Zabbix می‌خواند؛ (۴) اعلان را فقط در سطح Incident سرویس و از طریق کانال‌های موجود می‌فرستد.
+- [توصیه] همهٔ اتصال‌ها به سامانه‌های منبع فقط از `connector-runtime` (یا `edge-collector` اختیاری) مستقر در همان zone آغاز می‌شود و جهت ارتباط بین zoneها همواره «از zone منبع به سمت `monitoring-zone`» است (NFR-SEC-010).
 
 ## ۲. نمودار زمینه (C4 Level 1)
 
@@ -40,20 +41,20 @@ flowchart LR
 
     BSOIP["BSOIP<br/>Banking Service Observability<br/>& Intelligence Platform<br/>(on-prem, offline)"]
 
-    subgraph Existing["Existing monitoring platforms (read-only sources)"]
-        ZBX["Zabbix"]
+    subgraph Existing["Existing monitoring platforms (systems of record, reused)"]
+        ZBX["Zabbix<br/>problems, KPI-linked items,<br/>services / SLA"]
         SW["SolarWinds (SWIS)"]
-        SPL["Splunk"]
-        ES["Elasticsearch / OpenSearch"]
+        SPL["Splunk<br/>saved searches run in place"]
+        ES["Elasticsearch / OpenSearch<br/>aggregations run in place"]
     end
 
     subgraph Infra["Infrastructure & middleware (read-only sources)"]
-        MQ["IBM MQ"]
+        MQ["IBM MQ<br/>via IBM mq_prometheus exporter"]
         RMQ["RabbitMQ"]
         LB["F5 / HAProxy / NGINX / WAF"]
         K8S["Kubernetes / OpenShift (later)"]
         DB["Databases (read-only, later)"]
-        APPS["Banking applications<br/>(OTLP / Prometheus / syslog, optional)"]
+        APPS["Banking applications<br/>(OTLP / syslog, later, optional)"]
     end
 
     subgraph Shared["Shared enterprise services"]
@@ -67,18 +68,19 @@ flowchart LR
     EXT["Shetab / CBI / external parties<br/>(modelled, NOT connected)"]
 
     People -- "HTTPS (browser)" --> BSOIP
-    BSOIP -- "pull: JSON-RPC / SWIS / REST search / _search" --> Existing
-    BSOIP -- "pull: PCF / mgmt API / iControl / stats" --> Infra
+    BSOIP -- "pull: JSON-RPC (incl. service.get, sla.getsli) / SWIS / saved-search results / _search aggs" --> Existing
+    BSOIP -- "pull: Prometheus scrape (mq exporter); direct APIs only if gap" --> Infra
+    BSOIP -. "optional, default off: maintenance.create/update (calendar sync, FR-CAL-008)" .-> ZBX
     APPS -- "push: OTLP / syslog (optional)" --> BSOIP
     BSOIP -- "OIDC / LDAPS" --> IDP
-    BSOIP -- "SMTP / HTTPS webhook" --> NTF
+    BSOIP -- "SMTP / HTTPS webhook (incident-level only)" --> NTF
     BSOIP -- "NTP" --> NTP
     REG -. "offline bundle / image pull at install" .-> BSOIP
     BSOIP -- "audit forward (syslog/HEC)" --> SIEM
     EXT -. "appears only as ExternalParty entity" .- BSOIP
 ```
 
-*توضیح:* خط‌چین‌ها ارتباط غیرزمان‌اجرا (نصب) یا صرفاً مدل‌سازی هستند. ارتباط با `Shetab` و طرف‌های بیرونی فقط در قالب موجودیت `ExternalParty` در کاتالوگ است و هیچ اتصال شبکه‌ای به آن‌ها برقرار نمی‌شود.
+*توضیح:* خط‌چین‌ها ارتباط غیرزمان‌اجرا (نصب)، صرفاً مدل‌سازی، یا قابلیت اختیاری خاموش‌به‌صورت‌پیش‌فرض (نوشتن پنجرهٔ maintenance در Zabbix) هستند. ارتباط با `Shetab` و طرف‌های بیرونی فقط در قالب موجودیت `ExternalParty` در کاتالوگ است و هیچ اتصال شبکه‌ای به آن‌ها برقرار نمی‌شود.
 
 ## ۳. بازیگران و پرسوناها
 
@@ -98,18 +100,18 @@ flowchart LR
 
 | سامانه | نقش برای BSOIP | فاز ورود | وضعیت شناخت |
 |---|---|---|---|
-| Zabbix | منبع متریک میزبان، شبکه، و در صورت وجود LB/MQ؛ problemها به‌عنوان Event | P2 (VS-1) | API JSON-RPC — «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک» [باز Q-08] |
+| Zabbix | سامانهٔ مرجع متریک میزبان/شبکه و هشدار زیرساخت؛ problemها به‌عنوان Event؛ فقط itemهای مرتبط با KPI کپی می‌شوند (بقیه drill-down درخواستی)؛ قالب‌های رسمی LB/RabbitMQ/MSSQL؛ **سرویس/SLA** به‌عنوان شاهد (FR-INT-008)؛ مقصد اختیاری همگام‌سازی تقویم (FR-CAL-008) | P2 (VS-1) | API JSON-RPC — «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک» [باز Q-08] |
 | SolarWinds | منبع متریک شبکه/گره و هشدار از طریق SWIS/SWQL | P2 (Should) | «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک» [باز Q-08] |
-| Splunk | منبع لاگ برای استخراج متریک مشتق از لاگ و خلاصهٔ تراکنش؛ evidence query | P2/P3 (VS-1) | REST search API — «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک»؛ سهمیهٔ جستجو [باز Q-22] |
-| Elasticsearch / OpenSearch | همانند Splunk از طریق `_search` و aggregationها | P2/P3 (VS-1) | «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک» [باز Q-08، Q-22] |
-| IBM MQ | عمق صف، نرخ enqueue/dequeue، سن قدیمی‌ترین پیام، وضعیت کانال | P2 (VS-1) | دسترسی PCF فقط‌خواندنی — مجوزهای حداقلی با EXP-04 آزموده می‌شود |
+| Splunk | سامانهٔ مرجع لاگ؛ saved searchهای تعریف‌شده توسط پلتفرم **درون Splunk** اجرا و فقط تجمیع دقیقه‌ای کشیده می‌شود؛ evidence query | P2/P3 (VS-1) | REST search API — «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک»؛ سهمیهٔ جستجو [باز Q-22] |
+| Elasticsearch / OpenSearch | همانند Splunk: aggregation/transform درون ES و کشیدن نتیجه از طریق `_search` | P2/P3 (VS-1) | «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک» [باز Q-08، Q-22، Q-28] |
+| IBM MQ | عمق صف، max depth، سن قدیمی‌ترین پیام (exporter `mq_prometheus`)؛ نرخ‌ها فقط اگر MQI statistics فعال باشد ([باز Q-27])؛ وضعیت کانال | P2 (VS-1) | exporter رسمی IBM (Apache-2.0) با حساب MQ حداقلی یا itemهای موجود Zabbix — PoC-3/EXP-04؛ قالب رسمی Zabbix برای MQ وجود ندارد |
 | RabbitMQ | متریک صف و consumer از management API یا Prometheus plugin | P2 (Should) | «نیازمند تأیید در نسخهٔ نصب‌شدهٔ بانک» |
 | F5 / HAProxy / NGINX / WAF | آمار virtual server، pool، member، کد وضعیت، گواهی TLS، شمار block در WAF | P2 (LB)، P4 (WAF) | از هر منبعی که در دسترس است (Zabbix/SolarWinds/iControl REST/stats page)؛ capability به‌ازای هر نصب اعلام و تأیید می‌شود |
 | Kubernetes / OpenShift | متریک و رویداد pod/node برای سرویس‌های کانتینری | P4 (Could) | [باز Q-02] |
 | پایگاه‌های داده | سلامت DB (ابتدا SQL Server) با حساب فقط‌خواندنی | P4 | [باز Q-08] |
 | Banking applications | منبع اختیاری OTLP/Prometheus/syslog در صورت وجود؛ instrumentation مستقیم فقط فاز ۷ | P2 (اختیاری)، P7 | [فرض A-05] لاگ‌ها اکنون در Splunk/ES هستند |
 | AD / Bank IdP | احراز هویت کاربران (OIDC/SAML یا Keycloak با federation به AD) | P1 | [فرض A-07]، [باز Q-04] |
-| SMTP / SMS gateway / ITSM | ارسال اعلان و ایجاد ticket | P4 | [باز Q-14] |
+| SMTP / SMS gateway / ITSM | ارسال اعلان سطح Incident (حداکثر یکی به ازای Incident سرویس) و ایجاد ticket؛ هشدار زیرساخت از Zabbix/SolarWinds مستقیم | P4 | [باز Q-14] |
 | NTP | همگام‌سازی زمان همهٔ گره‌های پلتفرم | P1 | [فرض A-08]، [باز Q-17] |
 | Internal artifact registry | منبع image و بستهٔ نصب آفلاین | P1 | [باز Q-09]؛ [ADR-0016](architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md) |
 | Bank SIEM | گیرندهٔ رکوردهای audit پلتفرم | P1 (طراحی)، P2 (اتصال) | [باز Q-10] |
@@ -117,7 +119,7 @@ flowchart LR
 
 ## ۵. ناحیه‌های شبکه و مرزهای اعتماد
 
-[واقعیت] نام zoneها در اینجا نمونه هستند و نام‌گذاری واقعی بانک‌محور است (spine §3). [توصیه] الگوی استقرار: در هر zone منبع، یک «گره جمع‌آوری» شامل `connector-runtime` و `edge-collector` مستقر می‌شود؛ هستهٔ پلتفرم، پایگاه‌های داده و UI در `monitoring-zone` قرار دارند.
+[واقعیت] نام zoneها در اینجا نمونه هستند و نام‌گذاری واقعی بانک‌محور است (spine §3). [توصیه] الگوی استقرار: در هر zone منبع، یک «گره جمع‌آوری» شامل `connector-runtime` (و فقط در صورت نیاز `edge-collector`) مستقر می‌شود؛ هستهٔ پلتفرم، پایگاه‌های داده و UI در `monitoring-zone` قرار دارند.
 
 ```mermaid
 flowchart TB
@@ -128,8 +130,8 @@ flowchart TB
     subgraph MON["monitoring-zone"]
         UI["web-ui"]
         CORE["platform-core<br/>(api / ingest / analytics)"]
-        PG[("metadata-db<br/>PostgreSQL")]
-        CH[("telemetry-store<br/>ClickHouse")]
+        PG[("metadata-db<br/>PostgreSQL<br/>(+ derived KPI series)")]
+        CH[("telemetry-store<br/>ClickHouse - only on trigger")]
     end
 
     subgraph SHARED["shared-services-zone"]
@@ -141,13 +143,14 @@ flowchart TB
 
     subgraph DMZ["dmz"]
         CR1["connector-runtime"]
-        EC1["edge-collector"]
+        EC1["edge-collector (optional)"]
         WAF["WAF / F5 / HAProxy / NGINX"]
     end
 
     subgraph MWZ["middleware-zone"]
         CR2["connector-runtime"]
-        EC2["edge-collector"]
+        EC2["edge-collector (optional)"]
+        MQX["mq_prometheus exporter"]
         MQ["IBM MQ / RabbitMQ"]
     end
 
@@ -169,15 +172,16 @@ flowchart TB
     CORE -- "SMTP/HTTPS" --> SMTP
     CORE -- "syslog-TLS / HEC" --> SIEM
     CORE --> PG
-    CORE --> CH
+    CORE -.-> CH
 
     CR1 -- "read-only API" --> WAF
-    CR2 -- "PCF / mgmt API" --> MQ
+    CR2 -- "Prometheus scrape" --> MQX
+    MQX -- "PCF inquire, read-only" --> MQ
     CR3 -- "JDBC read-only (P4)" --> DBS
     CR4 -- "JSON-RPC / SWIS / REST / _search" --> TOOLS
 
     CR1 & CR2 & CR3 & CR4 -- "mTLS: config, commands long-poll, OTLP/HTTP, batch API" --> CORE
-    EC1 & EC2 -- "mTLS OTLP" --> CORE
+    EC1 & EC2 -. "mTLS OTLP (if deployed)" .-> CORE
 ```
 
 *توضیح:* همهٔ پیکان‌های بین‌zone از zone منبع به سمت `monitoring-zone` یا از `monitoring-zone` به سرویس‌های مشترک است. هیچ پیکانی از `platform-core` به داخل zoneهای منبع وجود ندارد؛ evidence queryها از طریق صف فرمان pull-based (long-poll روی `/internal/v1/commands`) به `connector-runtime` می‌رسند.
@@ -200,11 +204,12 @@ flowchart TB
 
 | سامانه | آغازکننده | پروتکل | جهت داده | اعتبارنامه | ردهٔ داده | Read-only؟ |
 |---|---|---|---|---|---|---|
-| Zabbix | `connector-runtime` | HTTPS JSON-RPC (`host.get`، `item.get`، `history.get`، `trend.get`، `problem.get` – نیازمند تأیید) | منبع → BSOIP | API token کاربر فقط‌خواندنی با دسترسی به host groupهای لازم | متریک، Event، موجودی hostها | بله |
+| Zabbix | `connector-runtime` | HTTPS JSON-RPC (`host.get`، `item.get`، `history.get`، `trend.get`، `problem.get`، `service.get`، `sla.getsli`، `maintenance.get` – نیازمند تأیید) | منبع → BSOIP | API token کاربر فقط‌خواندنی با دسترسی به host groupهای لازم | سری‌های مرتبط با KPI، Event، موجودی hostها، وضعیت سرویس و SLI | بله |
+| Zabbix (همگام‌سازی تقویم، **اختیاری**) | `connector-runtime` | HTTPS JSON-RPC (`maintenance.create`/`update` – نیازمند تأیید) | BSOIP → منبع | حساب **جدا** با حداقل دسترسی نوشتن روی اشیای مشخص؛ فقط با تأیید صریح بانک | پنجرهٔ maintenance/service window | **خیر** — پیش‌فرض خاموش؛ audit کامل (FR-CAL-008، [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)) |
 | SolarWinds | `connector-runtime` | HTTPS SWIS REST / SWQL | منبع → BSOIP | حساب فقط‌خواندنی Orion | متریک، وضعیت گره/رابط، alert | بله |
-| Splunk | `connector-runtime` | HTTPS REST search jobs | منبع → BSOIP (نتایج aggregation) | token با role محدود به indexهای مجاز و سهمیهٔ جستجو | متریک مشتق از لاگ، خلاصهٔ تراکنش، evidence (پس از redaction) | بله |
+| Splunk | `connector-runtime` | HTTPS REST: خواندن نتایج saved search (نصب‌شده توسط مدیر Splunk)، search job برای evidence | منبع → BSOIP (نتایج aggregation) | token با role محدود به indexهای مجاز و سهمیهٔ جستجو | متریک مشتق از لاگ، خلاصهٔ تراکنش، evidence (پس از redaction) | بله |
 | Elasticsearch / OpenSearch | `connector-runtime` | HTTPS `_search` / aggregations | منبع → BSOIP | API key/کاربر با privilege `read` روی index patternهای مجاز | همانند Splunk | بله |
-| IBM MQ | `connector-runtime` | MQ client + PCF inquire | منبع → BSOIP | کاربر MQ با مجوزهای inquire/display حداقلی (EXP-04) | عمق صف، نرخ‌ها، سن پیام، وضعیت کانال؛ **بدون خواندن محتوای پیام** | بله |
+| IBM MQ | exporter `mq_prometheus` (scrape توسط `connector-runtime`)؛ PCF مستقیم فقط در صورت شکاف | Prometheus HTTP؛ exporter با MQ client + PCF inquire | منبع → BSOIP | کاربر MQ با مجوزهای inquire/display حداقلی برای exporter (EXP-04، PoC-3) | عمق صف، نرخ‌ها، سن پیام، وضعیت کانال؛ **بدون خواندن محتوای پیام** | بله |
 | RabbitMQ | `connector-runtime` یا `edge-collector` (Prometheus scrape) | HTTPS management API / Prometheus | منبع → BSOIP | کاربر با tag `monitoring` (نیازمند تأیید) | متریک صف، consumer، node | بله |
 | F5 | `connector-runtime` | HTTPS iControl REST (یا از طریق Zabbix/SolarWinds) | منبع → BSOIP | حساب با نقش guest/auditor (نیازمند تأیید) | آمار virtual/pool/member، گواهی | بله |
 | HAProxy / NGINX | `connector-runtime` یا `edge-collector` | stats endpoint / Prometheus / syslog | منبع → BSOIP | بسته به endpoint | آمار درخواست، کد وضعیت، سلامت backend | بله |
@@ -224,7 +229,9 @@ flowchart TB
 
 - [واقعیت] جایگزینی Zabbix، SolarWinds، Splunk یا Elasticsearch نیست (F-02، spine §2).
 - [توصیه] لاگ خام را ذخیره نمی‌کند؛ فقط متریک و رویداد مشتق‌شده را نگه می‌دارد ([ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)).
-- پیکربندی تجهیزات یا ابزارهای موجود را تغییر نمی‌دهد و پیکربندی جدیدی روی آن‌ها لازم ندارد (NFR-IMP-002)؛ وب‌هوک ورودی فقط در صورت تصمیم بانک.
+- پیکربندی تجهیزات یا ابزارهای موجود را تغییر نمی‌دهد و پیکربندی جدیدی روی آن‌ها لازم ندارد (NFR-IMP-002)؛ وب‌هوک ورودی فقط در صورت تصمیم بانک. استثناهای اختیاری که فقط با تأیید بانک فعال می‌شوند: نصب saved search توسط مدیر Splunk/ES (Q-28)، فعال‌سازی MQI statistics (Q-27)، و نوشتن پنجرهٔ maintenance در Zabbix (FR-CAL-008).
+- هشدار زیرساختی را دوباره تولید یا ارسال نمی‌کند؛ هشدار زیرساخت در Zabbix/SolarWinds می‌ماند.
+- محصول تجاری APM/AIOps اتخاذ نمی‌کند ([ADR-0022](architecture-decision-records/ADR-0022-commercial-platforms-not-adopted.md)).
 - اصلاح خودکار (automated remediation) انجام نمی‌دهد؛ restart، failover یا تغییر مسیر اجرا نمی‌کند.
 - SIEM نیست و تشخیص تهدید امنیتی انجام نمی‌دهد؛ فقط audit خود را به SIEM می‌فرستد.
 - به Shetab، بانک مرکزی یا هیچ طرف بیرونی متصل نمی‌شود.
@@ -240,14 +247,22 @@ flowchart TB
 
 | فاز | یکپارچه‌سازی‌های فعال |
 |---|---|
+| P0.5 | Evidence PoC فقط‌خواندنی (PoC-1..PoC-5) روی Zabbix، یکی از Splunk/ES، exporter MQ |
 | P1 | AD/IdP، NTP، registry آفلاین، طراحی ارسال audit به SIEM |
-| P2 | Zabbix، Elasticsearch، Splunk، SolarWinds (Should)، IBM MQ، RabbitMQ، LB از هر منبع موجود، OTLP/Prometheus از طریق `edge-collector` |
+| P2 | Zabbix (+ سرویس/SLA در صورت PoC-1 مثبت)، یک سکوی لاگ که لاگ VS-1 را دارد (Splunk یا ES)، exporter MQ، SolarWinds (Should)، RabbitMQ/LB از طریق قالب‌های Zabbix؛ `edge-collector` فقط در صورت نیاز |
 | P3 | استخراج خلاصهٔ تراکنش از Splunk/ES (VS-1) |
 | P4 | ITSM/SMTP/SMS، webhookها، WAF، K8s، DB، JMX، federated evidence query |
 | P7 | instrumentation مستقیم و trace (در صورت نیاز اثبات‌شده) |
 
 ## ۹. نکته برای بازبینی
 
-- «نکته برای بازبینی»: نام فایل‌های اسناد requirements (`functional-requirements.md`، `non-functional-requirements.md`، `open-questions.md`) در spine تثبیت نشده است؛ پیوندها باید پس از ادغام بسته بررسی شوند.
+- پیوند پرسش‌های باز در 0.2 به [open-questions-and-assumptions.md](open-questions-and-assumptions.md) (همین پوشه) اصلاح شد.
 - «نکته برای بازبینی»: spine روش ارسال audit به SIEM را «forward to bank SIEM/Splunk» گفته است؛ پروتکل (syslog-TLS در برابر HEC) به ابزار SIEM بانک بستگی دارد و در [باز Q-10] و [باز Q-09] پیگیری شود.
 - «نکته برای بازبینی»: zone `monitoring-tools-zone` در نمودار نمونه است و ممکن است Zabbix/Splunk/ES در همان `monitoring-zone` باشند؛ در آن صورت `connector-runtime` مربوط در `monitoring-zone` مستقر می‌شود.
+
+## ۱۰. تاریخچه تغییر
+
+| Version | Date | تغییر |
+|---|---|---|
+| 0.1 | 2026-10-11 | نسخه اولیه. |
+| 0.2 | 2026-10-12 | تغییر پس از Product Benchmark: بازاستفاده از سرویس/SLA در Zabbix، saved searchهای درون Splunk/ES، exporter `mq_prometheus`؛ همگام‌سازی اختیاری تقویم به Zabbix؛ `edge-collector` اختیاری و ClickHouse مشروط؛ اصلاح پیوند open-questions. |

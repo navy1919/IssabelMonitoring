@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0005 | api-and-event-contracts | Proposed | Firm | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [container-architecture.md](../container-architecture.md)، [data-architecture.md](../data-architecture.md)، [ADR-0006](ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)
 
 ## Context

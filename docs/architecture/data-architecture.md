@@ -3,24 +3,25 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `ARC-DAT-001` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (۱۴۰۵/۰۷/۱۹) |
 | Owner | `Architecture` |
-| Related documents | [system-context.md](system-context.md)، [container-architecture.md](container-architecture.md)، [ADR-0005](architecture-decision-records/ADR-0005-api-and-event-contracts.md)، [ADR-0006](architecture-decision-records/ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)، [ADR-0007](architecture-decision-records/ADR-0007-metadata-store-postgresql.md)، [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-clickhouse.md)، [ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)، [ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0011](architecture-decision-records/ADR-0011-topology-model-and-dependency-discovery.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0019](architecture-decision-records/ADR-0019-transaction-correlation-tiers.md) |
+| Related documents | [system-context.md](system-context.md)، [container-architecture.md](container-architecture.md)، [ADR-0005](architecture-decision-records/ADR-0005-api-and-event-contracts.md)، [ADR-0006](architecture-decision-records/ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)، [ADR-0007](architecture-decision-records/ADR-0007-metadata-store-postgresql.md)، [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)، [ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)، [ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0011](architecture-decision-records/ADR-0011-topology-model-and-dependency-discovery.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0019](architecture-decision-records/ADR-0019-transaction-correlation-tiers.md)، [ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)، [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)، [capacity-planning.md](capacity-planning.md) |
 
 > **قرارداد برچسب‌گذاری:** [واقعیت]، [فرض A-xx]، [فرضیه]، [توصیه]، [باز Q-xx] — مطابق spine §1.
 >
-> **یادآوری:** جدول‌های این سند **طرح توضیحی** هستند و DDL اجرایی یا migration نیستند. نوع‌ها نوع منطقی‌اند؛ نگاشت دقیق به نوع PostgreSQL/ClickHouse در فاز ۱ و ۲ و پس از BM-01..BM-03 نهایی می‌شود.
+> **یادآوری:** جدول‌های این سند **طرح توضیحی** هستند و DDL اجرایی یا migration نیستند. نوع‌ها نوع منطقی‌اند؛ نگاشت دقیق به نوع PostgreSQL (و در صورت Trigger، ClickHouse) در فاز ۱ و ۲ و پس از PoC-5 و BM-02/BM-03 نهایی می‌شود.
 
 ## ۱. اصول
 
-1. **دو مخزن، بدون هم‌پوشانی** [توصیه]: دادهٔ مرجع، پیکربندی و حالت تراکنشی در `metadata-db` (PostgreSQL)؛ دادهٔ سری‌زمانی و رویدادی حجیم در `telemetry-store` (ClickHouse) ([ADR-0007](architecture-decision-records/ADR-0007-metadata-store-postgresql.md)، [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-clickhouse.md)).
-2. **بدون لاگ خام** [توصیه]: فقط متریک و رویداد مشتق‌شده ذخیره می‌شود؛ لاگ‌ها در Splunk/Elasticsearch می‌مانند ([ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)).
-3. **OTel + فضای نام `bank.*`** [توصیه]: نام‌گذاری ویژگی‌ها از OTel semantic conventions پیروی می‌کند و مفاهیم بانکی در `bank.*` هستند ([ADR-0006](architecture-decision-records/ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)).
-4. **حریم خصوصی از طراحی** [توصیه]: هر فیلد ردهٔ حریم خصوصی دارد؛ دادهٔ ممنوع هرگز ذخیره نمی‌شود ([ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)).
-5. **at-least-once + idempotent** (NFR-REL-001): هر رکورد کلید idempotency قطعی دارد.
-6. **منشأ صریح**: هر داده نشان می‌دهد از کجا، با چه روشی و در کدام tier همبستگی به دست آمده است.
+1. **PostgreSQL نخست، یک مخزن در شروع** [توصیه، 0.2]: دادهٔ مرجع، پیکربندی و حالت تراکنشی در schemaهای ماژولی `metadata-db`؛ دادهٔ زمانی مشتق (سری‌های KPI، خلاصهٔ تراکنش، سری‌های مرتبط با KPI، رویداد، سلامت، ناهنجاری) در schema `telemetry` همان PostgreSQL با جدول‌های partition‌شدهٔ زمانی (§۴.۲). `telemetry-store` (ClickHouse) فقط با Triggerهای [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md) اضافه می‌شود و نگاشت آن در §۴.۳ به‌عنوان هدف Trigger حفظ شده است. در هر زمان هر ردهٔ داده فقط در **یک** مخزن است (بدون هم‌پوشانی) ([ADR-0007](architecture-decision-records/ADR-0007-metadata-store-postgresql.md)).
+2. **فقط دادهٔ مرتبط با KPI** [توصیه، 0.2]: متریک خام Zabbix/SolarWinds به‌صورت wholesale کپی نمی‌شود. فقط سری‌هایی که در فهرست صریح «KPI-linked series» هر سرویس آمده‌اند (itemهای انتخابی Zabbix، متریک‌های exporter MQ، آمار LB) ingest می‌شوند؛ drill-down سایر itemها با کوئری درخواستی به history/trend منبع است. KPIهای تراکنش در خود Splunk/ES محاسبه و فقط تجمیع دقیقه‌ای کشیده می‌شود ([ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)).
+3. **بدون لاگ خام** [توصیه]: فقط متریک و رویداد مشتق‌شده ذخیره می‌شود؛ لاگ‌ها در Splunk/Elasticsearch می‌مانند ([ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)).
+4. **OTel + فضای نام `bank.*`** [توصیه]: نام‌گذاری ویژگی‌ها از OTel semantic conventions پیروی می‌کند و مفاهیم بانکی در `bank.*` هستند ([ADR-0006](architecture-decision-records/ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)).
+5. **حریم خصوصی از طراحی** [توصیه]: هر فیلد ردهٔ حریم خصوصی دارد؛ دادهٔ ممنوع هرگز ذخیره نمی‌شود ([ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)).
+6. **at-least-once + idempotent** (NFR-REL-001): هر رکورد کلید idempotency قطعی دارد.
+7. **منشأ صریح**: هر داده نشان می‌دهد از کجا، با چه روشی و در کدام tier همبستگی به دست آمده است.
 
 ## ۲. قراردادهای مشترک
 
@@ -130,9 +131,9 @@
 
 [توصیه] `ref_key` برای Splunk/ES فقط فیلتر ساختاریافته است و رشتهٔ کوئری آزاد نیست؛ ساخت کوئری در connector با الگوی تأییدشده انجام می‌شود تا budget و redaction قابل کنترل باشد.
 
-### ۳.۴ نمونهٔ متریک (Metric sample) — ClickHouse
+### ۳.۴ نمونهٔ متریک (Metric sample) — Store تله‌متری (فقط سری‌های مرتبط با KPI)
 
-سری متریک یک بار در `metric_series` ثبت و نمونه‌ها با `series_id` نوشته می‌شوند.
+سری متریک یک بار در `metric_series` ثبت و نمونه‌ها با `series_id` نوشته می‌شوند. [توصیه، 0.2] هر سری فقط وقتی ثبت می‌شود که در فهرست KPI-linked series یک سرویس باشد (`kpi_link` در جدول زیر)؛ ingest نمونهٔ سری‌های ثبت‌نشده را رد و شمارش می‌کند.
 
 **metric_series**
 
@@ -146,6 +147,7 @@
 | `bank.service.id` | string | N | سرویس کسب‌وکاری (denormalized برای کوئری) | P0 |
 | `attributes` | map | N | ویژگی‌های allowlist‌شده (بخش ۵) | P1 |
 | `source_system_id` | uuid | Y | منبع | P0 |
+| `kpi_link` | json | Y | (0.2) سرویس/قاعده‌هایی که این سری را مصرف می‌کنند و ردهٔ سری برای retention (`series_class`، §۹) | P0 |
 | `first_seen` / `last_seen` | ts | Y | — | P0 |
 
 **metric_samples**
@@ -165,7 +167,8 @@
 
 | ویژگی | نوع | Req | توضیح | PII |
 |---|---|---|---|---|
-| `bank.derivation.query_id` | string | Y | شناسهٔ الگوی کوئری تأییدشده در connector | P0 |
+| `bank.derivation.query_id` | string | Y | شناسهٔ الگوی کوئری تأییدشده در connector، یا شناسه/نسخهٔ saved search نصب‌شده در منبع (0.2) | P0 |
+| `bank.derivation.mode` | enum | Y | (0.2) `SOURCE_SAVED_SEARCH` (اجرا درون Splunk/ES، نصب‌شده توسط مدیر منبع — Q-28) یا `ON_DEMAND_QUERY` (aggregation درخواستی connector در سقف budget) | P0 |
 | `bank.derivation.source` | enum | Y | `SPLUNK`، `ELASTICSEARCH`، `OPENSEARCH` | P0 |
 | `bank.derivation.window` | string | Y | پنجرهٔ تجمیع (مثلاً `60s`) | P0 |
 | `bank.derivation.completeness` | enum | Y | `COMPLETE` (پنجره پس از تأخیر ایندکس بسته شد)، `PARTIAL` | P0 |
@@ -319,7 +322,7 @@
 
 **OperatorFeedback**: `id`، `incident_id`، `hypothesis_id`، `verdict` (`CONFIRMED`، `REJECTED`، `PARTIAL`)، `actual_cause_entity_id`، `comment` (redact‌شده)، `user_id` (P2)، `at`.
 
-### ۳.۱۱ رکورد وضعیت سلامت (Health state record) — ClickHouse `health_states`
+### ۳.۱۱ رکورد وضعیت سلامت (Health state record) — Store تله‌متری `health_states`
 
 | فیلد | نوع | Req | توضیح | PII |
 |---|---|---|---|---|
@@ -328,6 +331,8 @@
 | `ts` | ts | Y | زمان ارزیابی | P0 |
 | `evaluation_cycle_id` | id64 | Y | شناسهٔ چرخهٔ micro-batch | P0 |
 | `state` | enum `HealthState` | Y | `OK`، `DEGRADED`، `CRITICAL`، `UNKNOWN`، `EXPECTED_INACTIVE`، `MAINTENANCE` | P0 |
+| `derivation` | enum | Y | (0.2) `DIRECT` (از KPI/سیگنال خود موجودیت یا وضعیت سرویس Zabbix) یا `INFERRED` (استنتاج از وابستگی در نبود KPI تازه) — [correlation-and-intelligence.md](correlation-and-intelligence.md) | P0 |
+| `external_status_ref` | json | N | (0.2) وضعیت/SLI خوانده‌شده از سرویس/SLA در Zabbix (`service.get`، `sla.getsli`) به‌عنوان ورودی، با `serviceid` و زمان خواندن (FR-INT-008) | P0 |
 | `previous_state` | enum | Y | — | P0 |
 | `reason_codes` | array(string) | Y | مثلاً `SUCCESS_RATE_DROP`، `STALE_DATA`، `OUTSIDE_SERVICE_WINDOW` | P0 |
 | `explanation` | json | Y | ورودی‌ها، آستانه‌ها، baseline و قاعدهٔ فعال (NFR-USA-002) | P0 |
@@ -376,9 +381,34 @@
 
 [توصیه] تاریخچهٔ کاتالوگ (FR-CAT-012) با جداول `*_history` (نسخهٔ کامل ردیف + `changed_by` + `changed_at`) پیاده می‌شود؛ پیمایش توپولوژی با recursive CTE روی `dependency` ([ADR-0007](architecture-decision-records/ADR-0007-metadata-store-postgresql.md)). Secretها در PostgreSQL ذخیره نمی‌شوند؛ فقط ارجاع به SecretProvider (NFR-SEC-004).
 
-### ۴.۲ ClickHouse (`telemetry-store`) — جداول
+### ۴.۲ PostgreSQL schema `telemetry` (پیش‌فرض از 0.2)
 
-طرح‌های زیر توصیفی‌اند و باید با BM-01..BM-03 اعتبارسنجی شوند [فرضیه].
+[توصیه] جدول‌های منطقی همان جدول‌های §۴.۳ هستند (نام‌ها و کلیدها یکسان تا مهاجرت در صورت Trigger مکانیکی باشد)؛ تفاوت در سازوکار ذخیره است. این بخش توصیف است، نه DDL.
+
+| جدول | partition زمانی | کلید یکتا (idempotency) | نگهداری (پیشنهاد، Q-16) | یادداشت |
+|---|---|---|---|---|
+| `metric_series` | — | `series_id` | تا ۳ سال پس از `last_seen` | فقط سری‌های مرتبط با KPI |
+| `metric_samples` | روزانه | (`series_id`, `ts`) | ۳۰ روز | در Low با `metric_rollup_1m` یکی است (بازه ۶۰ ثانیه) → فقط یکی نگه داشته می‌شود |
+| `metric_rollup_1m` | هفتگی یا ماهانه | (`series_id`, `minute`) + `revision` | بر اساس ردهٔ سری (سیاست P2، §۹) | `min`، `max`، `sum`، `count`، `last` |
+| `metric_rollup_1h` | ماهانه | (`series_id`, `hour`) + `revision` | ۳ سال | از rollup دقیقه‌ای |
+| `events` | ماهانه | `id` | ۱۳ ماه | آخرین حالت با `ON CONFLICT ... DO UPDATE` روی نسخهٔ بالاتر |
+| `txn_summary_1m` | روزانه یا هفتگی | (`service`, `txn_type`, `hop`, `minute`, `outcome`, `source_system_id`) | ۹۰ روز دقیقه‌ای + rollup ساعتی ۱۳ ماه (پیشنهاد P2) یا ۱۳ ماه دقیقه‌ای (مقدار spine؛ در Medium احتمالاً Trigger T2) | upsert با `revision` بزرگ‌تر؛ صدک‌ها از منبع یا `latency_sketch` |
+| `txn_summary_1h` | ماهانه | مانند بالا با `hour` | ۱۳ ماه | (0.2) rollup جدید برای سیاست P2 |
+| `txn_events` | — | — | — | **ذخیره نمی‌شود** تا Trigger T1 (L2 > ~۱۰۰ رویداد/ثانیه) — در آن صورت مستقیم در ClickHouse |
+| `health_states` | ماهانه | (`entity_id`, `ts`) | ۱۳ ماه | تغییر حالت + snapshot دوره‌ای |
+| `anomalies` | ماهانه | (`entity_id`, `detector`, `ts`) + `revision` | ۱۳ ماه | Phase 5 |
+| `ingest_gaps` | ماهانه | (`source_system_id`, `from_ts`) | ۱۳ ماه | NFR-REL-002 |
+
+اصول [توصیه]:
+- partitioning بومی PostgreSQL (declarative range partitioning بر ستون زمان)؛ retention با detach/drop partition توسط job زمان‌بندی‌شده، نه `DELETE`.
+- index ترکیبی هم‌ترتیب با کلید یکتا (مثلاً سرویس + نوع + زمان)؛ BRIN بر ستون زمان برای جدول‌های بزرگ [فرضیه PoC-5].
+- rollupها با job بازمحاسبهٔ نسخه‌دار (§۶)؛ بدون TimescaleDB (TSL — Q-21).
+- کاربر پایگاه‌دادهٔ جدا برای نوشتن (`ingest`) و خواندن (`api`/`analytics`/Grafana اختیاری).
+- پایش شاخص‌های Trigger: ردیف/ثانیهٔ `txn_summary_1m` و سری‌های KPI، اندازهٔ schema `telemetry` و p95 کوئری‌ها (NFR-OBS-001).
+
+### ۴.۳ ClickHouse (`telemetry-store`) — هدف Trigger
+
+این نگاشت فقط پس از فعال شدن یکی از Triggerهای [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md) پیاده می‌شود؛ در آن زمان جدول‌های متأثر (معمولاً `txn_events`، `txn_summary_1m` و سری‌های KPI پرحجم) از §۴.۲ به اینجا منتقل می‌شوند. طرح‌های زیر توصیفی‌اند و باید با BM-01..BM-03 اعتبارسنجی شوند [فرضیه].
 
 | جدول | Engine (پیشنهادی) | PARTITION BY | ORDER BY | TTL | یادداشت |
 |---|---|---|---|---|---|
@@ -408,18 +438,19 @@
 | نرمال‌سازی مسیر | `http.route` قالبی (مثلاً `/cards/{id}/transfer`) به جای مسیر خام |
 | سقف سری به‌ازای منبع | سقف قابل پیکربندی سری جدید در ساعت و کل سری فعال برای هر `ConnectorInstance`؛ عبور = نمونه‌های اضافه رد + رویداد `CONNECTOR_STATUS` |
 | سقف مقادیر به‌ازای ویژگی | برای هر کلید (مثلاً `outcome_code` ≤ ۲۰۰ مقدار)؛ مقادیر بیشتر به `OTHER` نگاشت می‌شوند |
-| LowCardinality | برای ستون‌های کم‌تنوع (`txn_type`، `outcome`، `source_system`) |
+| LowCardinality / enum | برای ستون‌های کم‌تنوع (`txn_type`، `outcome`، `source_system`): `LowCardinality` در ClickHouse؛ enum یا کلید کوچک در PostgreSQL |
+| فهرست KPI-linked series (0.2) | اولین و مؤثرترین کنترل: سری خارج از فهرست وارد نمی‌شود |
 | مانیتورینگ | متریک self-telemetry: سری فعال، سری جدید/ساعت، ویژگی‌های حذف‌شده (NFR-OBS-001) |
 
-[فرض A-11] سناریوی Medium با ۱M سری فعال؛ سقف‌ها با این بودجه تنظیم و پس از Q-06 بازنگری می‌شوند.
+[فرض A-11] سناریوی Medium در حالت own-ingestion با ۱M سری فعال، و در سناریوی Reuse (0.2) با حدود ۲۰k سری مرتبط با KPI ([capacity-planning.md](capacity-planning.md))؛ سقف‌ها با بودجهٔ سناریوی Reuse تنظیم و پس از Q-06 بازنگری می‌شوند.
 
 ## ۶. کلیدهای idempotency و بازمحاسبه
 
 | داده | کلید idempotency | سازوکار |
 |---|---|---|
-| Metric sample | (`series_id`, `ts`) + `batch_id` | dedup دسته‌ای هنگام insert با توکن deduplication مبتنی بر `batch_id` [نیازمند تأیید در نسخهٔ ClickHouse]؛ تکرارهای باقی‌مانده در rollup با گروه‌بندی بر (`series_id`, `ts`) خنثی می‌شوند |
+| Metric sample | (`series_id`, `ts`) + `batch_id` | PostgreSQL: کلید یکتا + `ON CONFLICT DO NOTHING`؛ ClickHouse (پس از Trigger): dedup دسته‌ای هنگام insert با توکن deduplication مبتنی بر `batch_id` [نیازمند تأیید در نسخهٔ ClickHouse]؛ تکرارهای باقی‌مانده در rollup با گروه‌بندی بر (`series_id`, `ts`) خنثی می‌شوند |
 | Rollupها | (`series_id`, `minute`/`hour`) + `revision` | [توصیه] به جای materialized view لحظه‌ای، job زمان‌بندی‌شده پنجره‌های بسته‌شده (پس از watermark) را از دادهٔ dedup‌شده محاسبه و با `revision` جدید بازنویسی می‌کند؛ اجرای مجدد ایمن است. [فرضیه] هزینهٔ این job در BM-01 سنجیده می‌شود؛ در صورت هزینهٔ بالا، MV + اصلاح دوره‌ای جایگزین است |
-| Normalized event | `id` = هش(`source`, `source_event_id`, `state_seq`) | ReplacingMergeTree + dedup در حافظهٔ ingest برای پنجرهٔ کوتاه |
+| Normalized event | `id` = هش(`source`, `source_event_id`, `state_seq`) | PostgreSQL: upsert روی `id`؛ ClickHouse: ReplacingMergeTree؛ هر دو + dedup در حافظهٔ ingest برای پنجرهٔ کوتاه |
 | Transaction summary | (`service`, `txn_type`, `hop`, `minute`, `outcome`, `source_system_id`) + `revision` | ارسال مجدد با همان `revision` بی‌اثر؛ بازمحاسبه با `revision` بزرگ‌تر |
 | Transaction event | `event_id` | ReplacingMergeTree |
 | رکوردهای PostgreSQL از ingest | کلید طبیعی + `ON CONFLICT DO NOTHING/UPDATE` | — |
@@ -429,7 +460,7 @@
 ## ۷. مدل زمان
 
 - [توصیه] همهٔ زمان‌ها UTC با دقت میلی‌ثانیه ذخیره می‌شوند؛ نمایش با `Asia/Tehran` از tzdata (بدون offset ثابت) [فرض A-10].
-- فیلدهای زمانی: `observed_at` (زمان منبع؛ در ClickHouse به نام `ts`/`time`/`minute`)، `ingested_at` (زمان پذیرش در ingest)، و `source_clock_skew_estimate` (میلی‌ثانیه، در سطح منبع).
+- فیلدهای زمانی: `observed_at` (زمان منبع؛ در جدول‌های تله‌متری به نام `ts`/`time`/`minute`)، `ingested_at` (زمان پذیرش در ingest)، و `source_clock_skew_estimate` (میلی‌ثانیه، در سطح منبع).
 - **تخمین skew** [توصیه]: برای منابع push، میانهٔ متحرک (`ingested_at − observed_at`) منهای تأخیر انتقال مشاهده‌شده؛ برای منابع pull، مقایسهٔ زمان سرور منبع (در صورت ارائه در پاسخ API) با زمان `connector-runtime`. تخمین در `connectors.runtime_node`/`source_system` و متریک self-telemetry نگهداری می‌شود.
 - [فرض A-08] skew چند ثانیه‌ای ممکن است؛ [باز Q-17] وضعیت NTP؛ EXP-05 آن را اندازه می‌گیرد. اگر skew تخمینی از آستانه (مثلاً ۵ ثانیه، موقت) بیشتر شود، شواهد آن منبع در همبستگی با برچسب عدم‌قطعیت زمانی و پنجرهٔ زمانی گشادتر وارد می‌شوند (R-11).
 - [توصیه] `observed_at` اصلاح نمی‌شود (دادهٔ منبع حفظ می‌شود)؛ اصلاح skew فقط در زمان تحلیل اعمال می‌شود.
@@ -451,32 +482,36 @@
 
 ## ۹. سطوح نگهداری (retention)
 
-مطابق spine §6؛ همه موقت (Q-16) و audit وابسته به Q-10.
+مطابق spine §6؛ همه موقت (Q-16) و audit وابسته به Q-10. مخزن پیش‌فرض همهٔ رده‌های زمانی از 0.2 schema `telemetry` در PostgreSQL است (اعمال با drop partition)؛ ClickHouse (TTL) فقط پس از Trigger.
+
+**سیاست P2 — retention بر اساس ردهٔ سری** [توصیه، پیشنهاد برای Q-16]: `series_class` در `metric_series.kpi_link` یکی از `KPI_CORE` (سری‌های مستقیم در محاسبهٔ سلامت/SLO سرویس‌های حیاتی: rollup دقیقه‌ای ۱۳ ماه)، `KPI_SUPPORT` (شواهد کمکی: rollup دقیقه‌ای ۹۰ روز، سپس ساعتی ۳ سال) است؛ خلاصهٔ تراکنش دقیقه‌ای ۹۰ روز و سپس `txn_summary_1h` ۱۳ ماه. این سیاست تا تصمیم Q-16 مقدار spine را تغییر نمی‌دهد ولی تعیین می‌کند آیا Medium از Trigger T2 عبور می‌کند ([capacity-planning.md](capacity-planning.md)).
 
 | ردهٔ داده | مخزن | نگهداری | اعمال |
 |---|---|---|---|
-| Raw metric samples | ClickHouse `metric_samples` | ۳۰ روز | TTL + حذف partition روزانه |
-| 1-min rollups | `metric_rollup_1m` | ۱۳ ماه | TTL |
-| 1-h rollups | `metric_rollup_1h` | ۳ سال | TTL |
-| Normalized events | `events` | ۱۳ ماه | TTL |
-| Transaction summaries | `txn_summary_1m` | ۱۳ ماه | TTL |
-| Tokenized transaction events | `txn_events` | ۳۰ روز | TTL + حذف partition روزانه |
+| Raw metric samples (فقط KPI-linked) | `telemetry.metric_samples` | ۳۰ روز | drop partition روزانه (ClickHouse: TTL) |
+| 1-min rollups | `metric_rollup_1m` | ۱۳ ماه (spine)؛ پیشنهاد P2 بر اساس `series_class` | drop partition |
+| 1-h rollups | `metric_rollup_1h` | ۳ سال | drop partition |
+| Normalized events | `events` | ۱۳ ماه | drop partition |
+| Transaction summaries | `txn_summary_1m` (+ `txn_summary_1h` در P2) | ۱۳ ماه (spine)؛ پیشنهاد P2: ۹۰ روز دقیقه‌ای + ۱۳ ماه ساعتی | drop partition |
+| Tokenized transaction events | `txn_events` (فقط ClickHouse پس از Trigger T1) | ۳۰ روز | TTL + حذف partition روزانه |
 | Audit log | PostgreSQL `audit` (+ SIEM) | ≥ ۵ سال (یا الزام قانونی) | پارتیشن ماهانه؛ آرشیو به ذخیره‌سازی سرد [باز Q-10] |
 | Catalog/topology history | PostgreSQL | نامحدود (تا تصمیم بانک) | — |
 | Incidents/evidence | PostgreSQL | پیشنهاد ≥ ۳ سال [توصیه] | — |
 | `outbox.events` | PostgreSQL | پس از مصرف، ۷ روز [توصیه] | job پاک‌سازی |
 
-### ۹.۱ برآورد حجم (سناریوی Medium؛ همه فرض، اعتبارسنجی با BM-01/BM-03)
+### ۹.۱ برآورد حجم (سناریوی Medium، own-ingestion؛ همه فرض، اعتبارسنجی با BM-01/BM-03)
 
-فرض‌های این سند علاوه بر spine §10: ردیف rollup ≈ ۸–۲۰ بایت فشرده؛ ردیف txn summary ≈ ۵۰–۱۵۰ بایت فشرده. این دو عدد فرض همین سند هستند و باید در BM-01/BM-03 سنجیده شوند.
+> از 0.2 این جدول فقط سناریوی own-ingestion (نسخهٔ 0.1، گزینه D/B) را نشان می‌دهد. برآورد مرجع **سناریوی Reuse** (PostgreSQL، فقط KPI مشتق + سری‌های مرتبط با KPI + رویداد) و مقایسهٔ آن با Triggerهای ClickHouse در [capacity-planning.md](capacity-planning.md) آمده است و اینجا تکرار نمی‌شود.
+
+اندازهٔ ردیف‌ها از فرض‌های مرکزی [capacity-planning.md](capacity-planning.md) §۲ گرفته شده است (CAP-01..CAP-06؛ مالک عدد آن سند است): rollup یک‌دقیقه‌ای ۶–۱۲ بایت، rollup یک‌ساعته ۱۰–۲۰ بایت، خلاصهٔ تراکنش ۴۰–۱۰۰ بایت فشرده؛ اعتبارسنجی در BM-01/BM-03.
 
 | داده | فرمول | حجم روزانه | حجم دورهٔ نگهداری (به‌ازای هر replica) |
 |---|---|---|---|
 | Raw metrics | 33k/s × 86,400 ≈ 2.85 B نمونه × 1.5–3 B | ≈ 4.3–8.6 GB | × 30 ≈ 130–260 GB |
-| 1-min rollups | 1M سری × 1,440 ≈ 1.44 B ردیف × 8–20 B | ≈ 11.5–29 GB | × 395 ≈ 4.5–11.4 TB |
-| 1-h rollups | 1M × 24 = 24 M ردیف × 8–20 B | ≈ 0.2–0.5 GB | × 1,095 ≈ 0.2–0.5 TB |
+| 1-min rollups | 1M سری × 1,440 ≈ 1.44 B ردیف × 6–12 B | ≈ 8.6–17.3 GB | × 395 ≈ 3.4–6.8 TB |
+| 1-h rollups | 1M × 24 = 24 M ردیف × 10–20 B | ≈ 0.24–0.48 GB | × 1,095 ≈ 0.26–0.53 TB |
 | Events | 50/s × 86,400 ≈ 4.32 M × 200–500 B | ≈ 0.9–2.2 GB | × 395 ≈ 0.34–0.85 TB |
-| Txn summaries | 200/s × 86,400 ≈ 17.3 M × 50–150 B | ≈ 0.9–2.6 GB | × 395 ≈ 0.34–1.0 TB |
+| Txn summaries | 200/s × 86,400 ≈ 17.3 M × 40–100 B | ≈ 0.69–1.73 GB | × 395 ≈ 0.27–0.68 TB |
 | Txn events | 500/s × 86,400 ≈ 43.2 M × 60–150 B | ≈ 2.6–6.5 GB | × 30 ≈ 78–194 GB |
 
 «نکته برای بازبینی»: در Medium بازهٔ جمع‌آوری ۳۰ ثانیه است، پس rollup یک‌دقیقه‌ای فقط ۲ برابر فشرده‌سازی می‌دهد و با نگهداری ۱۳ ماهه بزرگ‌ترین مصرف‌کنندهٔ دیسک (چند ترابایت) می‌شود. پیشنهاد برای بازبینی Q-16: نگهداری ۱۳ ماههٔ rollup دقیقه‌ای فقط برای سری‌های متصل به سرویس‌ها/KPIها، و برای بقیه rollup پنج‌دقیقه‌ای یا ۹۰ روز. این پیشنهاد مقدار spine را تغییر نمی‌دهد تا تصمیم گرفته شود.
@@ -495,7 +530,7 @@
 
 ```mermaid
 flowchart LR
-    S["Source system<br/>(Zabbix / Splunk / ES / MQ)"] --> C["connector-runtime<br/>or edge-collector<br/>query template, redaction v1,<br/>HMAC tokenization"]
+    S["Source system<br/>(Zabbix items + services/SLA /<br/>Splunk-ES saved searches / mq exporter)"] --> C["connector-runtime<br/>(or optional edge-collector)<br/>query template, redaction v1,<br/>HMAC tokenization"]
     C --> I["platform-core ingest<br/>normalize, redaction v2,<br/>ExternalRef resolve, dedup"]
     I --> R["metric_samples / events /<br/>txn_summary_1m / txn_events"]
     R --> J["rollup jobs<br/>(revisioned)"]
@@ -527,7 +562,7 @@ flowchart LR
 2. **تغییر سازگار (minor)**: افزودن فیلد اختیاری، افزودن مقدار enum فقط در enumهای اعلام‌شده به‌عنوان «باز» (مثلاً `source_system`). مصرف‌کننده‌ها باید فیلد ناشناخته را نادیده بگیرند.
 3. **تغییر ناسازگار (major)**: حذف/تغییر نام/تغییر نوع فیلد، افزودن مقدار به enumهای بسته (`TxnOutcome`، `HealthState`)، تغییر معنای فیلد. نسخهٔ major در `type` منعکس می‌شود (مثلاً `...alert.v2`) و ingest برای دورهٔ گذار هر دو نسخه را می‌پذیرد.
 4. `connector-runtime` و `edge-collector` نسخهٔ قرارداد را در هر دسته اعلام می‌کنند؛ ingest حداقل N و N−1 major را پشتیبانی می‌کند تا ارتقای zoneها مستقل باشد.
-5. تغییر schema در ClickHouse فقط افزایشی (`ADD COLUMN` با مقدار پیش‌فرض)؛ تغییر ORDER BY = جدول جدید + انتقال، با ADR.
+5. تغییر schema در جدول‌های تله‌متری فقط افزایشی (PostgreSQL: `ADD COLUMN` با پیش‌فرض)؛ در ClickHouse (پس از Trigger) نیز فقط افزایشی (`ADD COLUMN` با مقدار پیش‌فرض)؛ تغییر ORDER BY = جدول جدید + انتقال، با ADR.
 6. migrationهای PostgreSQL نسخه‌دار و به‌ازای schema ماژول (ابزار در فاز ۱ انتخاب می‌شود)؛ بازگشت‌پذیری در پنجرهٔ نگهداری (NFR-DEP-003).
 7. تست قرارداد (contract test) بین Connector SDK و ingest در CI اجباری است.
 8. جداول OutcomeMapping و قالب‌های کلید (`key_scheme`) **داده** هستند و نسخه‌دار؛ تغییر آن‌ها کد را تغییر نمی‌دهد و در audit ثبت می‌شود.
@@ -536,6 +571,14 @@ flowchart LR
 
 - مالکیت schema برای TransactionType/OutcomeMapping (اینجا در `catalog`)؛ بدیل: schema جدید `transactions`.
 - نگهداری `health_states`، `anomalies`، `ingest_gaps` و Incidentها در spine تعیین نشده است.
-- حجم rollup یک‌دقیقه‌ای ۱۳ ماهه در Medium (بخش ۹.۱).
+- حجم rollup یک‌دقیقه‌ای ۱۳ ماهه در Medium (بخش ۹.۱) — در 0.2 با «فقط KPI-linked series» و سیاست P2 پاسخ داده شد؛ تصمیم نهایی Q-16.
+- ستون‌های `kpi_link`، `bank.derivation.mode`، `derivation` و `external_status_ref` و جدول `txn_summary_1h` افزوده‌های 0.2 هستند و باید در domain model و JSON Schemaها (ADR-0005/0006) منعکس شوند.
 - استفاده از job بازمحاسبه به جای materialized view برای rollupها (بخش ۶) یک انتخاب طراحی است که به BM-01 وابسته است.
 - CloudEvents اجازهٔ نام extension نقطه‌دار نمی‌دهد؛ `bank.*` در `attributes` حمل می‌شود. ADR-0005/ADR-0006 باید همین را بیان کنند.
+
+## ۱۴. تاریخچه تغییر
+
+| Version | Date | تغییر |
+|---|---|---|
+| 0.1 | 2026-10-11 | نسخه اولیه. |
+| 0.2 | 2026-10-12 | تغییر پس از Product Benchmark: نگاشت ذخیره‌سازی PostgreSQL نخست (schema `telemetry` با partition زمانی)؛ نگاشت ClickHouse به‌عنوان هدف Trigger؛ فقط سری‌های مرتبط با KPI؛ سیاست P2؛ فیلدهای `derivation` و `external_status_ref` در سلامت. |

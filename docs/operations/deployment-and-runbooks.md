@@ -3,11 +3,12 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `OPS-001` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (۱۴۰۵/۰۷/۱۹) |
 | Owner | `Architecture` |
-| Related documents | [master-plan.md](../roadmap/master-plan.md)، [container-architecture.md](../architecture/container-architecture.md)، [capacity-planning.md](../architecture/capacity-planning.md)، [quality-and-validation-strategy.md](../testing/quality-and-validation-strategy.md)، [open-questions-and-assumptions.md](../architecture/open-questions-and-assumptions.md)، [ADR-0016](../architecture/architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)، [ADR-0017](../architecture/architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0010](../architecture/architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0018](../architecture/architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md) |
+| Related documents | [master-plan.md](../roadmap/master-plan.md)، [container-architecture.md](../architecture/container-architecture.md)، [capacity-planning.md](../architecture/capacity-planning.md)، [quality-and-validation-strategy.md](../testing/quality-and-validation-strategy.md)، [open-questions-and-assumptions.md](../architecture/open-questions-and-assumptions.md)، [ADR-0016](../architecture/architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)، [ADR-0017](../architecture/architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0010](../architecture/architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0018](../architecture/architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0008](../architecture/architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)، [ADR-0024](../architecture/architecture-decision-records/ADR-0024-visualization-split-custom-operator-ui-optional-grafana.md)، [build-buy-reuse-analysis.md](../benchmark/build-buy-reuse-analysis.md) |
+| Change log | `0.1` (2026-10-11) پیش‌نویس اولیه؛ `0.2` (2026-10-12) **تغییر پس از Product Benchmark**: استقرار Low = `platform-core` + PostgreSQL + `connector-runtime` (+ exporter MQ)؛ ClickHouse مشروط به trigger؛ `edge-collector` و Grafana اختیاری؛ محیط PoC؛ runbookهای متناظر |
 
 > این سند مدل‌ها و رویه‌ها را **توصیف** می‌کند؛ هیچ اسکریپت، فایل Compose، Helm chart یا پیکربندی واقعی در فاز ۰ نوشته نمی‌شود [واقعیت] (F-02).
 
@@ -21,7 +22,23 @@
 
 ## ۲. مدل‌های استقرار
 
-سناریوهای ظرفیت Low/Medium/High همگی فرض‌اند [فرض A-11] و با [باز Q-06] و BM-01..03 جایگزین می‌شوند. اندازه نودها در این سند عمداً عددی نیست؛ پس از BM-01/BM-02 تعیین می‌شود [باز Q-18].
+سناریوهای ظرفیت Low/Medium/High همگی فرض‌اند [فرض A-11] و با [باز Q-06] و PoC-5 (و BM-01..03 فقط در صورت trigger) جایگزین می‌شوند. اندازه نودها در این سند عمداً عددی نیست [باز Q-18].
+
+**اجزای پایه و اختیاری (پس از Product Benchmark، [ADR-0021](../architecture/architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)):**
+
+| جزء | وضعیت | شرط |
+|---|---|---|
+| `platform-core`، `web-ui`، PostgreSQL (`metadata-db` + جداول KPI مشتق)، `connector-runtime` | **پایه** | همیشه |
+| exporter IBM `mq_prometheus` (در zone MQ، scrape توسط `connector-runtime`) | پایه در صورت انتخاب در PoC-3 | اگر داده MQ از Zabbix کافی نباشد |
+| Keycloak | اختیاری | نبود IdP بانک [باز Q-04] |
+| `telemetry-store` ClickHouse (+ Keeper در replication) | **مشروط** | فقط با trigger [ADR-0008](../architecture/architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md) |
+| `edge-collector` | اختیاری (از فاز ۴) | zone غیرقابل‌دسترس برای `connector-runtime`، SNMP/syslog، ابزارگذاری آینده |
+| Grafana OSS | اختیاری | نماهای مهندسی و self-monitoring؛ [باز Q-21]، [ADR-0024](../architecture/architecture-decision-records/ADR-0024-visualization-split-custom-operator-ui-optional-grafana.md) |
+| Kafka (KRaft) | مشروط | فقط با trigger ADR-0010 |
+
+### ۲.۰ محیط Evidence PoC (فاز 0.5)
+
+یک VM آفلاین موقت در شبکهٔ بانک با PostgreSQL و ابزار اسکریپت PoC، حساب‌های read-only موقت با تاریخ انقضا و یک **نمونهٔ غیرتولیدی Zabbix** برای PoC-1. هیچ نوشتنی در سیستم‌های تولیدی؛ کد دورریختنی؛ پس از گزارش PoC، داده و حساب‌ها حذف و حذف گواهی می‌شود. این محیط جزء bundle محصول نیست ([master-plan.md](../roadmap/master-plan.md) §۵.۰.۵).
 
 ### ۲.۱ تک‌نود — Low (UAT، pilot، VS-1)
 
@@ -31,21 +48,23 @@ flowchart LR
     subgraph N1["VM-1 (all-in-one)"]
       UI["web-ui (static via reverse proxy)"]
       CORE["platform-core roles: api+ingest+analytics"]
-      PG[("metadata-db PostgreSQL")]
-      CH[("telemetry-store ClickHouse")]
+      PG[("PostgreSQL: metadata + derived KPI tables")]
       KC["Keycloak (if no bank IdP)"]
+      GF["Grafana OSS (optional)"]
     end
   end
-  subgraph Z1["source zone e.g. core-banking-zone"]
+  subgraph Z1["source zone e.g. middleware-zone"]
     CR1["connector-runtime"]
-    EC1["edge-collector"]
+    MQX["mq_prometheus exporter (if chosen)"]
   end
-  CR1 -- "mTLS outbound" --> CORE
-  EC1 -- "OTLP mTLS outbound" --> CORE
-  CR1 -- read-only --> SRC1["Zabbix / Splunk / ES / MQ"]
+  CR1 -- "mTLS outbound (batch API)" --> CORE
+  CR1 -- scrape --> MQX
+  MQX -- read-only --> QM["IBM MQ"]
+  CR1 -- read-only --> SRC1["Zabbix / Splunk or ES"]
+  GF -. read-only .-> PG
 ```
 
-*توضیح:* همه اجزای مرکزی روی یک VM؛ مناسب UAT و VS-1. بدون HA؛ بکاپ اجباری. در zoneهای منبع، `connector-runtime` و `edge-collector` می‌توانند روی یک VM مشترک باشند.
+*توضیح:* استقرار Low = `platform-core` + PostgreSQL + `connector-runtime` (+ exporter MQ)؛ همه اجزای مرکزی روی یک VM؛ مناسب UAT و VS-1. بدون ClickHouse و بدون `edge-collector`؛ Grafana فقط در صورت انتخاب. بدون HA؛ بکاپ اجباری.
 
 ### ۲.۲ چندنود — Medium (تولید یک سایت + DR)
 
@@ -59,39 +78,39 @@ flowchart TB
     I2["core node 4: ingest+analytics"]
     PGP[("PostgreSQL primary")]
     PGR[("PostgreSQL replica")]
-    CH1[("ClickHouse replica 1")]
-    CH2[("ClickHouse replica 2")]
-    K["ClickHouse Keeper x3"]
+    CH1[("ClickHouse replica 1 (only if trigger)")]
+    CH2[("ClickHouse replica 2 (only if trigger)")]
+    K["ClickHouse Keeper x3 (only if trigger)"]
   end
   LB --> A1 & A2
   A1 & A2 & I1 & I2 --> PGP
   PGP -. streaming .-> PGR
-  I1 & I2 --> CH1 & CH2
-  CH1 <--> K
-  CH2 <--> K
+  I1 & I2 -.-> CH1 & CH2
+  CH1 <-.-> K
+  CH2 <-.-> K
   subgraph DR["DR site (passive)"]
     PGD[("PostgreSQL standby")]
-    CHD[("ClickHouse (restore target or replica)")]
+    CHD[("ClickHouse (only if trigger)")]
     COLD["core nodes (cold/warm)"]
   end
   PGP -. async .-> PGD
 ```
 
-*توضیح:* نودهای `platform-core` بدون حالت و در سایت active-active؛ roleها با پیکربندی جدا می‌شوند. Patroni برای PostgreSQL در فاز ۶. ClickHouse با ReplicatedMergeTree و Keeper سه‌نودی. مدل DR (warm standby یا restore از backup) به [باز Q-05] بستگی دارد. `analytics` باید یک leader فعال برای هر بخش کار داشته باشد (قفل/lease در PostgreSQL) تا ارزیابی تکراری نشود [توصیه].
+*توضیح:* نودهای `platform-core` بدون حالت و در سایت active-active؛ roleها با پیکربندی جدا می‌شوند. Patroni برای PostgreSQL در فاز ۶. KPIهای مشتق به‌طور پیش‌فرض در PostgreSQL (partitioned) هستند؛ ClickHouse با ReplicatedMergeTree و Keeper سه‌نودی **فقط اگر trigger ADR-0008 فعال شود** (برای Medium با نگهداشت ۱۳ ماههٔ خلاصه‌های دقیقه‌ای محتمل است مگر نگهداشت طبق [باز Q-16] محدود شود؛ [capacity-planning.md](../architecture/capacity-planning.md)). مدل DR (warm standby یا restore از backup) به [باز Q-05] بستگی دارد. `analytics` باید یک leader فعال برای هر بخش کار داشته باشد (قفل/lease در PostgreSQL) تا ارزیابی تکراری نشود [توصیه].
 
 ### ۲.۳ HA چندسایتی — High
 
-- دو سایت فعال + DR [فرض]؛ مسیر رشد بدون بازمعماری (NFR-SCL-003): ClickHouse shard + replica، افزایش نودهای `ingest`/`analytics`، و **Kafka (KRaft) فقط اگر triggerهای ADR-0010 فعال شوند** (> ~50k events/s پایدار، نیاز replay چندمصرف‌کننده، fan-in چندسایتی، یا تحمل قطعی ingest بیش از بافر collector ≥ 4 h).
+- دو سایت فعال + DR [فرض]؛ مسیر رشد بدون بازمعماری (NFR-SCL-003): ClickHouse (پس از trigger) shard + replica، افزایش نودهای `ingest`/`analytics`، و **Kafka (KRaft) فقط اگر triggerهای ADR-0010 فعال شوند** (> ~50k events/s پایدار، نیاز replay چندمصرف‌کننده، fan-in چندسایتی، یا تحمل قطعی ingest بیش از بافر collector ≥ 4 h).
 - [باز Q-05] آیا metadata باید active-active بین سایت‌ها باشد؟ پیش‌فرض: خیر — یک primary PostgreSQL، سایت دوم read replica.
 
 ```mermaid
 flowchart LR
   subgraph S1["Site A"]
-    C1["core nodes"] --> CHA[("ClickHouse shard1/2 replica A")]
+    C1["core nodes"] --> CHA[("ClickHouse shard1/2 replica A (if triggered)")]
     C1 --> PGA[("PostgreSQL primary")]
   end
   subgraph S2["Site B"]
-    C2["core nodes"] --> CHB[("ClickHouse shard1/2 replica B")]
+    C2["core nodes"] --> CHB[("ClickHouse shard1/2 replica B (if triggered)")]
     C2 --> PGB[("PostgreSQL replica")]
   end
   PGA -. streaming .-> PGB
@@ -107,7 +126,8 @@ flowchart LR
 | جزء | در هر zone منبع | منابع لازم | ملاحظات |
 |---|---|---|---|
 | `connector-runtime` | ۱ (یا ۲ برای HA در فاز ۶، با تقسیم کار یا lease) | CPU/RAM متوسط، دیسک کم | credentialها فقط اینجا؛ فقط outbound |
-| `edge-collector` | ۱ یا بیشتر | دیسک برای صف ≥ 4 h در حجم Medium per-zone (NFR-REL-003) | redaction processor فعال |
+| exporter `mq_prometheus` | ۱ در zone MQ (در صورت انتخاب در PoC-3) | کم | حساب MQ با حداقل مجوز؛ بدون تغییر پیکربندی queue manager مگر استثنای تأییدشده (Q-27) |
+| `edge-collector` (اختیاری، از فاز ۴) | ۰ به‌طور پیش‌فرض؛ ۱ یا بیشتر در صورت نیاز | دیسک برای صف ≥ 4 h در حجم per-zone (NFR-REL-003) | redaction processor فعال |
 
 قواعد فایروال لازم (به‌ازای هر zone): zone → monitoring-zone روی پورت‌های ingest/API داخلی (mTLS)؛ zone-local → منابع روی پورت‌های API منبع. **هیچ** قاعده‌ای از monitoring-zone به zone لازم نیست.
 
@@ -140,7 +160,7 @@ flowchart LR
 
 | بخش | محتوا |
 |---|---|
-| `images/` | OCI images: `platform-core`، `web-ui` (یا static در reverse proxy)، `connector-runtime`، `edge-collector` (توزیع OCB)، PostgreSQL، ClickHouse، ClickHouse Keeper، Keycloak (اختیاری)، reverse proxy |
+| `images/` | پایه: `platform-core`، `web-ui` (یا static در reverse proxy)، `connector-runtime`، PostgreSQL، reverse proxy؛ در صورت انتخاب: exporter `mq_prometheus`، Keycloak؛ **ماژول‌های اختیاری جدا** (فقط در صورت نیاز در bundle): `edge-collector` (توزیع OCB)، ClickHouse + Keeper، Grafana OSS |
 | `sbom/` | SBOM CycloneDX هر image و artifact |
 | `signatures/` | امضای هر image و manifest (ابزار امضا در ADR-0016) |
 | `checksums` | SHA-256 همه فایل‌ها، خود فایل امضاشده |
@@ -148,7 +168,7 @@ flowchart LR
 | `install/` | اسکریپت‌های preflight، install، verify، upgrade، rollback، backup (فقط توصیف در این سند) |
 | `config-templates/` | قالب پیکربندی هر محیط بدون secret |
 | `docs/` | راهنمای نصب، release notes، runbookها |
-| `migrations/` | migrationهای PostgreSQL و ClickHouse نسخه‌دار (درون artifact) |
+| `migrations/` | migrationهای PostgreSQL (و ClickHouse در صورت trigger) نسخه‌دار (درون artifact) |
 
 ### ۵.۲ registry داخلی
 
@@ -163,7 +183,7 @@ flowchart LR
 4. **Load images** به registry یا runtime محلی.
 5. **پیکربندی** از مخزن `deploy-config` + secretها از SecretProvider.
 6. **پایگاه داده‌ها:** راه‌اندازی، migrations، ایجاد کاربران با حداقل دسترسی (کاربر برنامه بدون UPDATE/DELETE روی audit).
-7. **راه‌اندازی** نودهای core، سپس `connector-runtime`/`edge-collector` در zoneها.
+7. **راه‌اندازی** نودهای core، سپس `connector-runtime` (و exporter MQ، و `edge-collector` در صورت استقرار) در zoneها.
 8. **Smoke test:** ورود، health endpoint، دریافت داده نمونه از کانکتور file import، صفحه self-health سبز.
 9. **ثبت** نسخه نصب‌شده و نتایج verify در audit عملیاتی.
 
@@ -173,15 +193,15 @@ flowchart LR
 
 | داده | روش [توصیه] | دوره | نگهداری | آزمون بازیابی |
 |---|---|---|---|---|
-| PostgreSQL (`metadata-db`) | base backup + WAL archiving (PITR) | پیوسته + روزانه | [باز Q-16] | ماهانه |
-| ClickHouse (`telemetry-store`) | `BACKUP` به مقصد دیسک/شیء داخلی؛ جداول rollup اولویت بالاتر از raw | روزانه (افزایشی) | [باز Q-16] | فصلی؛ raw قابل بازسازی نیست → شکاف علامت‌گذاری |
+| PostgreSQL (`metadata-db` + جداول KPI مشتق) | base backup + WAL archiving (PITR)؛ partitionهای قدیمی KPI در صورت حجم زیاد با بکاپ جداگانه | پیوسته + روزانه | [باز Q-16] | ماهانه |
+| ClickHouse (`telemetry-store`، فقط در صورت trigger) | `BACKUP` به مقصد دیسک/شیء داخلی؛ جداول rollup اولویت بالاتر از raw | روزانه (افزایشی) | [باز Q-16] | فصلی؛ raw قابل بازسازی نیست → شکاف علامت‌گذاری |
 | پیکربندی | مخزن Git `deploy-config` + پشتیبان مخزن | پیوسته | دائم | با هر نصب |
 | کلیدها و secretها | پشتیبان رمز‌شده جدا با کنترل دوگانه؛ کلیدهای HMAC با key id | با هر چرخش | تا پایان retention داده وابسته | سالانه |
 | داده domain (کاتالوگ، تقویم) | export YAML دوره‌ای علاوه بر backup پایگاه داده | روزانه | — | با هر انتشار |
 
 - RPO metadata ≤ 15 min و RTO ≤ 4 h (NFR-AVL-003، موقت تا [باز Q-05]).
 - backupها رمزنگاری‌شده (NFR-SEC-002) و خارج از دامنه خرابی سیستم اصلی.
-- **ترتیب بازیابی:** secretها/کلیدها → PostgreSQL (PITR) → ClickHouse → core → connectors. پس از بازیابی، بازه بدون داده در UI به‌صورت شکاف نمایش داده می‌شود (NFR-REL-002).
+- **ترتیب بازیابی:** secretها/کلیدها → PostgreSQL (PITR) → ClickHouse (در صورت وجود) → core → connectors. پس از بازیابی، بازه بدون داده در UI به‌صورت شکاف نمایش داده می‌شود (NFR-REL-002).
 
 ## ۷. ارتقا و بازگشت (Upgrade & Rollback)
 
@@ -222,9 +242,12 @@ flowchart LR
 |---|---|---|
 | ingest lag (`ingested_at - observed_at`) per source | `ingestion` | p95 > poll interval + 60 s (NFR-PRF-002) |
 | lag و خطای کانکتور، مصرف budget | `connector-runtime` | آخرین poll موفق قدیمی‌تر از ۳ دوره |
-| صف دیسکی collector (درصد پر بودن، سن قدیمی‌ترین آیتم) | `edge-collector` | > 50% یا سن > 1 h |
-| خطای نوشتن، parts، merges، فضای دیسک ClickHouse | ClickHouse | دیسک > 75% |
-| replication lag PostgreSQL/ClickHouse | DB | > RPO/2 |
+| scrape exporter MQ (موفقیت، سن آخرین نمونه) | `connector-runtime` | ۳ scrape ناموفق پیاپی |
+| خطای نوشتن، اندازه partitionها، فضای دیسک PostgreSQL | PostgreSQL | دیسک > 75% |
+| شاخص‌های trigger ADR-0008 (ردیف KPI/ثانیه، حجم پیش‌بینی‌شده ۱۳ ماهه، p95 query) | `ingestion`/`query-api` | نزدیک شدن به آستانه → ثبت برای بازبینی معماری |
+| (در صورت استقرار) صف دیسکی collector | `edge-collector` | > 50% یا سن > 1 h |
+| (در صورت وجود) خطای نوشتن، parts، merges، فضای دیسک ClickHouse | ClickHouse | دیسک > 75% |
+| replication lag PostgreSQL (و ClickHouse) | DB | > RPO/2 |
 | مدت چرخه ارزیابی analytics | `analytics` | > 60 s (NFR-PRF-004) |
 | redaction hits per source | `ingestion` | جهش ناگهانی (نشانه تغییر قالب لاگ منبع) |
 | انقضای گواهی‌ها | همه | < 30 روز |
@@ -232,7 +255,7 @@ flowchart LR
 | در دسترس بودن IdP | `iam` | خطای پیاپی |
 
 - self-telemetry با OTel از خود اجزا به `ingestion` + **مسیر هشدار مستقل** (مثلاً health check خارجی ساده یا ثبت در Zabbix بانک) تا قطعی ingest خودش دیده شود [توصیه]. این وابستگی یک‌طرفه است و کارکرد پلتفرم به Zabbix وابسته نیست.
-- Grafana OSS فقط اختیاری برای داشبورد داخلی پلتفرم، مشروط به [باز Q-21] (ADR-0014).
+- Grafana OSS فقط اختیاری برای داشبورد داخلی پلتفرم و نماهای مهندسی، بدون تغییر و بدون توزیع نسخهٔ تغییریافته (R-18)، مشروط به [باز Q-21] (ADR-0014، ADR-0024). کارکرد پلتفرم به Grafana وابسته نیست.
 
 ## ۹. Runbookها
 
@@ -252,18 +275,18 @@ flowchart LR
 ### RB-02 — تأخیر ingestion
 
 - **علائم:** ingest lag بالا؛ داشبوردها کهنه.
-- **تشخیص:** کدام مرحله؟ صف collector (رشد؟) → پاسخ‌های 429 از ingest → زمان batch insert در ClickHouse → CPU/GC نودهای ingest → merges ClickHouse.
-- **اقدام:** افزودن نود `ingest` (Medium+)؛ افزایش اندازه batch؛ بررسی query سنگین هم‌زمان؛ در فشار ClickHouse → RB-03؛ اگر پایدار و نزدیک triggerهای ADR-0010 → ثبت برای بازبینی معماری.
+- **تشخیص:** کدام مرحله؟ کندی منبع یا budget (lag کانکتور) → پاسخ‌های 429 از ingest → زمان batch insert در PostgreSQL (یا ClickHouse) → CPU/GC نودهای ingest → قفل/autovacuum PostgreSQL.
+- **اقدام:** افزودن نود `ingest` (Medium+)؛ افزایش اندازه batch؛ بررسی query سنگین هم‌زمان؛ در فشار دیسک → RB-03؛ اگر پایدار و نزدیک triggerهای ADR-0008/ADR-0010 → ثبت برای بازبینی معماری.
 - **تأیید:** lag به هدف بازگشت؛ هیچ drop در شمارنده‌ها.
 
-### RB-03 — فشار دیسک ClickHouse
+### RB-03 — فشار دیسک ذخیره‌گاه تله‌متری (PostgreSQL؛ ClickHouse در صورت وجود)
 
-- **علائم:** دیسک > 75%؛ خطای insert؛ merges معوق.
-- **تشخیص:** حجم per table/partition؛ اجرای TTL؛ تعداد parts؛ رشد غیرمنتظره (cardinality انفجاری یک منبع؟).
-- **اقدام:** اطمینان از اجرای TTL؛ حذف partitionهای منقضی؛ محدود کردن موقت منبع پرحجم در کانکتور/collector؛ افزایش دیسک؛ بازبینی retention (Q-16) فقط با تأیید مالک داده. **هرگز** حذف دستی جداول metadata یا audit.
+- **علائم:** دیسک > 75%؛ خطای insert؛ (ClickHouse) merges معوق.
+- **تشخیص:** حجم per table/partition؛ اجرای حذف partition منقضی/TTL؛ bloat و autovacuum (PostgreSQL)؛ تعداد parts (ClickHouse)؛ رشد غیرمنتظره (cardinality انفجاری یک منبع؟).
+- **اقدام:** اطمینان از اجرای حذف partition/TTL؛ حذف partitionهای منقضی؛ اگر رشد ساختاری است، ارزیابی trigger ADR-0008؛ محدود کردن موقت منبع پرحجم در کانکتور/collector؛ افزایش دیسک؛ بازبینی retention (Q-16) فقط با تأیید مالک داده. **هرگز** حذف دستی جداول metadata یا audit.
 - **پیشگیری:** پیش‌بینی ظرفیت از روند رشد (self-monitoring).
 
-### RB-04 — بافر collector در حال پر شدن
+### RB-04 — بافر collector در حال پر شدن (فقط در صورت استقرار `edge-collector`)
 
 - **علائم:** صف دیسکی > 50%؛ سن قدیمی‌ترین آیتم در حال رشد.
 - **تشخیص:** اتصال collector → core (شبکه، گواهی mTLS منقضی؟، فایروال)؛ ingest پاسخ 429؟
@@ -311,6 +334,8 @@ flowchart LR
 - handover رسمی در فاز ۶ (M6): آموزش، runbookها، drillها، ماتریس RACI.
 
 ## نکته برای بازبینی
+
+- در سناریوی reuse، بدون `edge-collector` بافر دیسکی ۴ ساعته (NFR-REL-003) وجود ندارد؛ تحمل قطع با checkpoint/watermark در `connector-runtime` و بازخوانی از منبع تأمین می‌شود که به retention منبع وابسته است. این باید در بازبینی NFR-REL-003 صریح شود.
 
 - استفاده از Zabbix بانک به‌عنوان مسیر هشدار مستقل برای خود پلتفرم (§۸) یک وابستگی یک‌طرفه است؛ باید با اصل دامنه خرابی مستقل ADR-0017 تطبیق داده شود (پیشنهاد: پلتفرم برای کارکرد به آن وابسته نیست، فقط برای هشدارِ «خودم پایینم» استفاده می‌شود).
 - ارقام آستانه‌های self-monitoring (۵۰٪، ۷۵٪، ۳۰ روز) پیش‌فرض پیشنهادی‌اند، نه الزام تأییدشده.

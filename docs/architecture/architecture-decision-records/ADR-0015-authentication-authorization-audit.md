@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0015 | authentication-authorization-audit | Proposed | **Blocked (Q-04)** | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [security-and-threat-model.md](../security-and-threat-model.md)، [ADR-0007](ADR-0007-metadata-store-postgresql.md)
 
 ## Context

@@ -3,11 +3,12 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `DOC-REQ-002` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (۱۴۰۵/۰۷/۱۹ – `1405/07/19`) |
 | Owner | `Architecture` |
-| Related documents | [product-charter.md](../vision/product-charter.md)، [domain-model.md](../vision/domain-model.md)، [functional-requirements.md](functional-requirements.md)، [ADR-0010](../architecture/architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0015](../architecture/architecture-decision-records/ADR-0015-authentication-authorization-audit.md)، [ADR-0016](../architecture/architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)، [ADR-0017](../architecture/architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0018](../architecture/architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md) |
+| Related documents | [product-charter.md](../vision/product-charter.md)، [domain-model.md](../vision/domain-model.md)، [functional-requirements.md](functional-requirements.md)، [ADR-0010](../architecture/architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0015](../architecture/architecture-decision-records/ADR-0015-authentication-authorization-audit.md)، [ADR-0016](../architecture/architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)، [ADR-0017](../architecture/architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0018](../architecture/architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0008](../architecture/architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)، [ADR-0022](../architecture/architecture-decision-records/ADR-0022-commercial-platforms-not-adopted.md)، [capacity-planning.md](../architecture/capacity-planning.md)، [open-questions-and-assumptions.md](../architecture/open-questions-and-assumptions.md) |
+| Change log | `0.1` (2026-10-11) پیش‌نویس اولیه؛ `0.2` (2026-10-12) **تغییر پس از Product Benchmark**: نرمال‌سازی ارقام فارسی/عربی-هندی در NFR-PRV-002؛ فرایند استثنای NFR-IMP-002 (PoC-3/Q-27)؛ سناریوی reuse در NFR-SCL؛ بازبینی تحریم/لایسنس در NFR-CMP-001 (Q-24) |
 
 > **قرارداد برچسب‌گذاری:** **[واقعیت]**، **[فرض A-xx]**، **[فرضیه]**، **[توصیه]**، **[باز Q-xx]** — مطابق [منشور محصول](../vision/product-charter.md).
 
@@ -49,7 +50,7 @@
 | NFR-PRF-005 | توپولوژی ۵۰۰ گره | رندر تعاملی ≤ 2 s | P2→P6 | Provisional | BM-10 |
 | NFR-SCL-001 | سناریوی Medium | برآوردن همهٔ NFR-PRF در Medium روی سخت‌افزار مرجع | P6 | Provisional | Q-06، Q-18، BM-01..03 |
 | NFR-SCL-002 | مقیاس افقی نقش‌ها | افزایش throughput با افزودن گره ingest/analytics | P2→P6 | Firm (طراحی) | BM-07، BM-08 |
-| NFR-SCL-003 | مسیر High بدون بازمعماری | triggerهای Kafka/sharding مستند و آزموده | P6 | Provisional | ADR-0010، BM-01 |
+| NFR-SCL-003 | مسیر High بدون بازمعماری | triggerهای ClickHouse/Kafka/sharding مستند و آزموده | P6 | Provisional | ADR-0008، ADR-0010، BM-01، PoC-5 |
 | NFR-AVL-001 | دسترس‌پذیری UI/API | 99.9٪ ماهانه | P6 | Blocked | Q-05 |
 | NFR-AVL-002 | حوزهٔ خرابی مستقل | ۰ وابستگی زمان اجرا به سیستم‌های پایش‌شده | P1→P6 | Firm | – |
 | NFR-AVL-003 | DR | RPO ≤ 15 min (metadata)؛ RTO ≤ 4 h؛ gap telemetry مجاز ولی علامت‌دار | P6 | Blocked | Q-05، BM-09 |
@@ -72,8 +73,8 @@
 | NFR-OBS-001 | self-telemetry و صفحهٔ سلامت | همهٔ مؤلفه‌ها OTel و health endpoint | P2→P6 | Firm | – |
 | NFR-OBS-002 | lag connector/منبع | lag به ازای هر ConnectorInstance | P2 | Firm | – |
 | NFR-IMP-001 | بار محدود روی منبع | در بودجهٔ توافق‌شدهٔ هر منبع | P2 | Provisional | Q-22، Q-08، BM-04..06 |
-| NFR-IMP-002 | بدون تغییر پیکربندی تجهیزات | ۰ تغییر الزامی | P2 | Firm | **[واقعیت F-02]** |
-| NFR-CMP-001 | نگاشت انطباق | ماتریس الزامات تکمیل و تأیید | P1→P6 | Blocked | Q-10 |
+| NFR-IMP-002 | بدون تغییر پیکربندی تجهیزات | ۰ تغییر الزامی؛ هر استثنا فقط با تأیید مستند بانک | P2 | Firm | **[واقعیت F-02]**، Q-27، PoC-3 |
+| NFR-CMP-001 | نگاشت انطباق + بازبینی تحریم/لایسنس | ماتریس الزامات و نظر حقوقی تحریم/لایسنس تکمیل و تأیید | P0.5→P6 | Blocked | Q-10، Q-24، Q-25، Q-21 |
 
 ---
 
@@ -86,7 +87,7 @@
 - **فاز/وضعیت:** P1 / Firm.
 
 #### NFR-SEC-002 — رمزنگاری در حالت سکون
-- **شرح:** volumeهای PostgreSQL، ClickHouse، صف‌های دیسکی collector و پشتیبان‌ها رمز‌شده (رمزنگاری دیسک/فایل‌سیستم یا قابلیت پایگاه‌داده).
+- **شرح:** volumeهای PostgreSQL، ClickHouse و صف‌های دیسکی collector (در صورت استقرار) و پشتیبان‌ها رمز‌شده (رمزنگاری دیسک/فایل‌سیستم یا قابلیت پایگاه‌داده).
 - **هدف:** ۱۰۰٪ volumeهای حاوی داده و پشتیبان‌ها.
 - **راستی‌آزمایی:** چک‌لیست استقرار و بازبینی امنیتی Phase 6.
 - **فاز/وضعیت:** P1 (طراحی) → P6 (اعتبارسنجی) / Firm؛ روش وابسته به استاندارد OS **[باز Q-03]**.
@@ -122,7 +123,7 @@
 - **فاز/وضعیت:** P1 / Firm. ریسک R-09.
 
 #### NFR-SEC-008 — baselineهای سخت‌سازی (CIS-like)
-- **شرح:** سخت‌سازی OS، container runtime، PostgreSQL، ClickHouse و reverse proxy طبق baseline بانک یا معادل CIS.
+- **شرح:** سخت‌سازی OS، container runtime، PostgreSQL، ClickHouse (در صورت trigger [ADR-0008](../architecture/architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)) و reverse proxy طبق baseline بانک یا معادل CIS.
 - **هدف:** انطباق با baseline توافق‌شده؛ استثناها مستند.
 - **راستی‌آزمایی:** اسکن انطباق خودکار (ابزار مورد تأیید بانک) در Phase 6.
 - **فاز/وضعیت:** P1→P6 / Provisional، **[باز Q-03]**.
@@ -148,10 +149,10 @@
 - **فاز/وضعیت:** P2 / Firm. **[باز Q-10]** برای الزامات تکمیلی (مثلاً PCI DSS). ریسک R-10.
 
 #### NFR-PRV-002 — redaction در edge و در ingest (دفاع در عمق)
-- **شرح:** آشکارسازهای PAN (Luhn + الگو)، کد ملی، شبا (`IR` + ۲۴ رقم)، شمارهٔ موبایل و الگوهای حساب قابل‌پیکربندی، هم در `edge-collector`/`connector-runtime` و هم در `ingestion`.
+- **شرح:** آشکارسازهای PAN (Luhn + الگو)، کد ملی، شبا (`IR` + ۲۴ رقم)، شمارهٔ موبایل و الگوهای حساب قابل‌پیکربندی، هم در `connector-runtime` (و `edge-collector` در صورت استقرار) و هم در `ingestion`. **پیش از اجرای آشکارسازها، ارقام فارسی (U+06F0..U+06F9) و عربی-هندی (U+0660..U+0669) به ارقام ASCII نرمال‌سازی می‌شوند** (و جداکننده‌های رایج مانند فاصله، خط تیره، ZWNJ و فاصلهٔ بدون‌شکست درون دنبالهٔ رقمی برای تطبیق نادیده گرفته می‌شوند)، تا PAN یا کد ملی نوشته‌شده با ارقام فارسی از redaction عبور نکند. نرمال‌سازی فقط برای تشخیص است؛ مقدار جایگزین‌شده همان span متن اصلی است.
 - **هدف:** recall = ۱۰۰٪ برای PAN معتبر Luhn و شبای معتبر روی مجموعهٔ آزمون مصنوعی؛ نرخ مثبت کاذب گزارش و پایش می‌شود (عدد هدف با EXP-01 تعیین می‌شود).
-- **راستی‌آزمایی:** مجموعهٔ آزمون مصنوعی در CI؛ آزمون اینکه غیرفعال‌کردن یک لایه همچنان با لایهٔ دیگر داده را پاک می‌کند.
-- **فاز/وضعیت:** P2 / Firm.
+- **راستی‌آزمایی:** مجموعهٔ آزمون مصنوعی در CI شامل نمونه‌های با ارقام فارسی، عربی-هندی و ترکیبی (مثلاً `۶۰۳۷-99xx-…`)؛ آزمون اینکه غیرفعال‌کردن یک لایه همچنان با لایهٔ دیگر داده را پاک می‌کند. در PoC (فاز 0.5) ممیزی redaction روی ذخیره‌گاه PoC همین قاعده را به‌کار می‌گیرد.
+- **فاز/وضعیت:** P2 / Firm (از PoC در فاز 0.5 اعمال می‌شود).
 
 #### NFR-PRV-003 — توکن‌سازی HMAC و چرخش کلید
 - **شرح:** HMAC-SHA256 با کلید جدا برای هر Environment در secret store؛ چرخش با دورهٔ هم‌پوشانی که در آن توکن‌های قدیم و جدید هر دو قابل‌همبستگی‌اند.
@@ -160,7 +161,7 @@
 - **فاز/وضعیت:** P2 / Firm (دورهٔ چرخش Provisional، **[باز Q-09]**، **[باز Q-10]**).
 
 #### NFR-PRV-004 — اجرای سیاست نگهداشت
-- **شرح:** حذف خودکار دادهٔ منقضی بر اساس کلاس داده (TTL در ClickHouse، jobهای پاک‌سازی در PostgreSQL).
+- **شرح:** حذف خودکار دادهٔ منقضی بر اساس کلاس داده (drop partition و jobهای پاک‌سازی در PostgreSQL؛ TTL در ClickHouse در صورت trigger).
 - **هدف (موقت):** نمونه‌های خام معیار ۳۰ روز؛ rollup یک‌دقیقه‌ای ۱۳ ماه؛ rollup یک‌ساعته ۳ سال؛ رویدادهای نرمال‌شده ۱۳ ماه؛ خلاصه‌های تراکنش ۱۳ ماه؛ رویدادهای تراکنش توکن‌شده ۳۰ روز؛ audit ≥ ۵ سال. حذف ≤ ۲۴ ساعت پس از انقضا.
 - **راستی‌آزمایی:** آزمون خودکار TTL؛ گزارش دوره‌ای قدیمی‌ترین داده به ازای کلاس.
 - **فاز/وضعیت:** P2 / Provisional، **[باز Q-16]**، **[باز Q-10]**.
@@ -176,7 +177,7 @@
 > همهٔ اهداف این بخش در سناریوی Medium و روی سخت‌افزار مرجع (**[باز Q-18]**) سنجیده می‌شوند و تا انجام بنچمارک‌ها **[فرضیه]** هستند.
 
 #### NFR-PRF-001 — push ingest-to-visible
-- **شرح:** فاصلهٔ زمانی دریافت داده در `edge-collector` تا قابل‌پرس‌وجو بودن در UI.
+- **شرح:** فاصلهٔ زمانی دریافت داده در `edge-collector` (در صورت استقرار) یا دریافت batch از `connector-runtime` تا قابل‌پرس‌وجو بودن در UI.
 - **هدف:** p95 ≤ 30 s.
 - **راستی‌آزمایی:** BM-07 با تولیدکنندهٔ بار مصنوعی و برچسب زمانی سرتاسری؛ معیار self-monitoring در تولید.
 - **فاز/وضعیت:** P2 (اندازه‌گیری) → P6 (اعتبارسنجی) / Provisional.
@@ -210,19 +211,20 @@
 #### NFR-SCL-001 — برآوردن سناریوی Medium
 - **شرح:** همهٔ اهداف NFR-PRF و NFR-REL در سناریوی Medium (۸,۰۰۰ مؤلفه، ۱M سری فعال، ۳۳k نمونه/ثانیه میانگین با peak 4×، ۵۰ رویداد/ثانیه، ۲۰۰ ردیف خلاصهٔ تراکنش/ثانیه، ۵۰۰ رویداد تراکنش توکن‌شده/ثانیه).
 - **هدف:** برآورده‌شدن روی سخت‌افزار مرجع توافق‌شده.
-- **برآورد ذخیره‌سازی (فرمول، **[فرضیه]** تا BM-01):** ۳۳,۰۰۰ × ۸۶,۴۰۰ ≈ ۲٫۸۵ میلیارد نمونه/روز × ۱٫۵–۳ بایت ≈ ۴–۹ GB/روز → ۳۰ روز خام ≈ ۱۳۰–۲۶۰ GB به ازای هر replica.
-- **راستی‌آزمایی:** BM-01..03 در EXP-03؛ آزمون بار سرتاسری Phase 6.
+- **برآورد ذخیره‌سازی (فرمول، **[فرضیه]** تا BM-01):** ۳۳,۰۰۰ × ۸۶,۴۰۰ ≈ ۲٫۸۵ میلیارد نمونه/روز × ۱٫۵–۳ بایت ≈ ۴–۹ GB/روز → ۳۰ روز خام ≈ ۱۳۰–۲۶۰ GB به ازای هر replica. این ارقام مربوط به **سناریوی ingest کامل (own-ingestion)** است.
+- **سناریوی reuse (پیش‌فرض پس از Product Benchmark، [ADR-0021](../architecture/architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)):** فقط KPIهای مشتق دقیقه‌ای، سری‌های مرتبط با KPI (itemهای منتخب Zabbix) و رویدادهای نرمال‌شده ingest می‌شوند؛ متریک خام در Zabbix/SolarWinds و لاگ خام در Splunk/ES می‌ماند. فرض‌ها **[فرضیه]**: Low = ۲k سری @60 s (≈ ۳۳ نمونه/ثانیه) + ۲۰ ردیف خلاصهٔ تراکنش/ثانیه + ۵ رویداد/ثانیه؛ Medium = ۲۰k سری @30 s (≈ ۶۷۰ نمونه/ثانیه) + ۲۰۰ ردیف/ثانیه + ۵۰ رویداد/ثانیه. در Medium، ۲۰۰ ردیف/ثانیه ≈ ۱۷٫۳ میلیون ردیف/روز ≈ ۶٫۳ میلیارد ردیف/سال؛ با نگهداشت ۱۳ ماهه از حد راحتی PostgreSQL فراتر می‌رود و **trigger ورود ClickHouse** ([ADR-0008](../architecture/architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)) محتمل است، مگر نگهداشت خلاصه‌های ۱ دقیقه‌ای به ۹۰ روز و پس از آن rollup ساعتی محدود شود **[باز Q-16]**. جزئیات و جدول مقایسه در [capacity-planning.md](../architecture/capacity-planning.md)؛ اعتبارسنجی با PoC-5. در سناریوی reuse، **بودجهٔ پرس‌وجوی سمت منبع** (saved searchهای Splunk/ES به ازای TransactionType در دقیقه) هزینهٔ اصلی است و در NFR-IMP-001 کنترل می‌شود **[باز Q-28]**.
+- **راستی‌آزمایی:** PoC-5 (PostgreSQL در حجم مصنوعی Low/Medium)؛ BM-01..03 فقط در صورت فعال شدن trigger ClickHouse؛ آزمون بار سرتاسری Phase 6 برای سناریوی توافق‌شده (reuse یا own-ingestion).
 - **فاز/وضعیت:** P6 / Provisional، **[باز Q-06]**، **[باز Q-18]**.
 
 #### NFR-SCL-002 — مقیاس افقی نقش‌های ingest و analytics
-- **شرح:** نقش‌های `ingest` و `analytics` از `platform-core` بی‌حالت‌اند (state در PostgreSQL/ClickHouse) و با افزودن گره مقیاس می‌گیرند؛ analytics با تقسیم کار (partition به ازای گروه سرویس) و قفل/lease.
-- **هدف:** افزایش تقریباً خطی throughput ingest با افزودن گره تا اشباع ClickHouse؛ نسبت دقیق با BM-07 اندازه‌گیری می‌شود.
+- **شرح:** نقش‌های `ingest` و `analytics` از `platform-core` بی‌حالت‌اند (state در PostgreSQL؛ و ClickHouse در صورت trigger) و با افزودن گره مقیاس می‌گیرند؛ analytics با تقسیم کار (partition به ازای گروه سرویس) و قفل/lease.
+- **هدف:** افزایش تقریباً خطی throughput ingest با افزودن گره تا اشباع ذخیره‌گاه تله‌متری (PostgreSQL در سناریوی reuse؛ ClickHouse پس از trigger)؛ نسبت دقیق با BM-07 اندازه‌گیری می‌شود.
 - **راستی‌آزمایی:** BM-07، BM-08 با ۱، ۲ و ۳ گره.
 - **فاز/وضعیت:** P2 (طراحی) → P6 / Firm (طراحی)، عدد Provisional.
 
 #### NFR-SCL-003 — مسیر به سناریوی High بدون بازمعماری
-- **شرح:** گذار به High (۲۰۰k نمونه/ثانیه، ۵,۰۰۰ رویداد تراکنش/ثانیه) از طریق افزودن Kafka (triggerهای [ADR-0010](../architecture/architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)) و sharding ClickHouse، بدون تغییر قراردادهای API/رویداد.
-- **هدف:** طرح گذار مستند؛ قراردادها مستقل از وجود Kafka.
+- **شرح:** گذار از PostgreSQL به ClickHouse (triggerهای [ADR-0008](../architecture/architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)) و سپس به High (۲۰۰k نمونه/ثانیه، ۵,۰۰۰ رویداد تراکنش/ثانیه) از طریق افزودن Kafka (triggerهای [ADR-0010](../architecture/architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)) و sharding ClickHouse، بدون تغییر قراردادهای API/رویداد. در سناریوی reuse، رسیدن به High عمدتاً به افزایش بار پرس‌وجوی سمت منبع وابسته است، نه حجم ingest.
+- **هدف:** طرح گذار مستند؛ قراردادها و ماژول‌ها مستقل از وجود Kafka و از نوع ذخیره‌گاه تله‌متری (repository abstraction).
 - **راستی‌آزمایی:** بازبینی معماری؛ نمونهٔ اولیهٔ sharding در BM-01 (اختیاری).
 - **فاز/وضعیت:** P6 / Provisional.
 
@@ -262,9 +264,10 @@
 
 #### NFR-REL-003 — بافر edge ≥ ۴ ساعت
 - **شرح:** صف دیسکی `edge-collector` و `connector-runtime` در هر zone، قطع ≥ ۴ ساعته ingest را تحمل کند.
-- **هدف:** ≥ 4 h در حجم Medium هر zone. **برآورد اندازه ([فرضیه]، تا BM-07):** اگر یک zone ۲۵٪ حجم Medium را حمل کند (≈ ۸,۳۰۰ نمونه/ثانیه) و هر نمونه روی دیسک صف ≈ ۱۰۰ بایت باشد: ۸,۳۰۰ × ۱۴,۴۰۰ × ۱۰۰ ≈ ۱۲ GB، به‌علاوهٔ رویدادها (مثلاً ۱۳ رویداد/ثانیه × ۱۴,۴۰۰ × ~۱ KB ≈ ۰٫۲ GB) و حاشیهٔ ۲× → حدود ۲۵ GB دیسک برای صف.
+- **هدف:** ≥ 4 h در حجم Medium هر zone. **برآورد اندازه ([فرضیه]، تا BM-07؛ مالک عدد [capacity-planning.md](../architecture/capacity-planning.md) §۶):** بزرگ‌ترین zone ≈ ۴۰٪ حجم Medium (CAP-11، ≈ ۱۳٬۲۰۰ نمونه/ثانیه) با ۵۰–۱۵۰ بایت به ازای نمونه در صف (CAP-10) → حجم بافر ۴ ساعته ≈ ۱۰٫۵–۳۱ GB (با رویدادها)؛ دیسک پیشنهادی صف ۵۰–۱۰۰ GB به ازای گره.
 - **راستی‌آزمایی:** BM-07 (قطع ۴ ساعته و بازپخش)؛ هشدار پرشدن صف.
 - **فاز/وضعیت:** P2→P6 / Provisional، **[باز Q-06]**. فراتر از ۴ ساعت یکی از triggerهای Kafka است (ADR-0010).
+- **تغییر پس از Product Benchmark:** در گزینهٔ E بیشتر داده‌ها با pull از منابع موجود (Zabbix history، saved searchهای Splunk/ES) جمع می‌شوند و `edge-collector` اختیاری است. برای این مسیرها تحمل قطع از «بافر دیسکی» به **checkpoint + backfill** منتقل می‌شود: پس از بازگشت `ingest`، connector از آخرین checkpoint پنجره‌های بسته‌شده را دوباره می‌خواند. حد تحمل قطع = کمترین مقدار بین ماندگاری داده در منبع (مثلاً history در Zabbix، retention ایندکس در ES) و بودجهٔ پرس‌وجوی backfill. هدف این مسیرها: قطع ≥ ۴ ساعت بدون از دست رفتن دادهٔ KPI، به شرط ماندگاری منبع ≥ ۲۴ ساعت **[فرض A-05، باز Q-26/Q-28]**. هدف ۴ ساعتهٔ بافر دیسکی فقط برای zoneهایی باقی می‌ماند که `edge-collector` یا exporter مستقر دارند (مثلاً `mq_prometheus`، که داده‌اش در منبع نگه داشته نمی‌شود و قطع طولانی در آن به‌صورت gap علامت‌گذاری می‌شود، NFR-REL-002).
 
 #### NFR-REL-004 — تخریب تدریجی هنگام از دسترس خارج شدن منبع
 - **شرح:** از کار افتادن یک منبع یا connector، سایر بخش‌ها را مختل نمی‌کند؛ connector با backoff دوباره تلاش می‌کند؛ پس از بازگشت، backfill در حد بودجهٔ پرس‌وجو.
@@ -374,16 +377,18 @@
 #### NFR-IMP-002 — بدون تغییر پیکربندی الزامی روی تجهیزات موجود
 - **شرح:** پلتفرم بدون نیاز به تغییر پیکربندی تجهیزات و سیستم‌های موجود کار می‌کند (به‌جز ایجاد حساب‌های فقط‌خواندنی). webhookهای ورودی اختیاری‌اند.
 - **هدف:** ۰ تغییر الزامی.
-- **راستی‌آزمایی:** چک‌لیست onboarding هر منبع.
+- **فرایند استثنا:** هر تغییری که منبعی به آن نیاز داشته باشد (نمونهٔ شناخته‌شده: فعال‌سازی آمار/monitoring صف IBM MQ برای نرخ‌ها یا oldest message age — PoC-3، **[باز Q-27]**؛ یا نوشتن maintenance در Zabbix در FR-CAL-008، **[باز Q-26]**) الزامی تلقی نمی‌شود و فقط به شکل «استثنای اختیاری» با این شرایط پذیرفته است: (۱) درخواست مکتوب با شرح اثر و rollback؛ (۲) تأیید مالک سیستم منبع و کمیتهٔ تغییر بانک؛ (۳) ثبت در فهرست استثناها در [open-questions-and-assumptions.md](../architecture/open-questions-and-assumptions.md)؛ (۴) پلتفرم بدون آن تغییر همچنان کار کند و قابلیت وابسته به‌صورت Capability «unavailable» گزارش شود.
+- **راستی‌آزمایی:** چک‌لیست onboarding هر منبع؛ در PoC-3 بررسی اینکه داده‌های الزامی بدون تغییر پیکربندی به‌دست می‌آیند.
 - **فاز/وضعیت:** P2 / Firm، **[واقعیت F-02]**.
 
 ## ۱۴. انطباق (CMP)
 
 #### NFR-CMP-001 — نگاشت انطباق (placeholder)
 - **شرح:** ماتریس نگاشت الزامات مقرراتی و استانداردها (مقررات بانک مرکزی، کاربردپذیری PCI DSS، ISO 27001، اقامت داده، نگهداشت audit) به NFRها و کنترل‌ها. هیچ الزام مقرراتی در این سند فرض یا ادعا نشده است.
-- **هدف:** ماتریس تکمیل‌شده و تأییدشده توسط واحد انطباق پیش از M6.
-- **راستی‌آزمایی:** بازبینی انطباق.
-- **فاز/وضعیت:** P1→P6 / Blocked، **[باز Q-10]**. ریسک R-13.
+- **بازبینی تحریم و لایسنس (افزوده پس از Product Benchmark):** پیش از هر تصمیم خرید، تمدید، به‌روزرسانی یا گسترش نرم‌افزار خارجی (به‌ویژه محصولات شرکت‌های آمریکایی و نیز فروشندگان غیرآمریکایی با ریسک تحریم ثانویه) نظر حقوقی/انطباق بانک لازم است **[باز Q-24]**؛ وضعیت لایسنس و مسیر به‌روزرسانی Splunk، SolarWinds و Elasticsearch موجود به‌عنوان ریسک تداوم ثبت می‌شود **[باز Q-25]**، R-16؛ تعهدات AGPL در صورت تغییر یا توزیع Zabbix/Grafana بررسی می‌شود **[باز Q-21]**، R-18. این سند مشاورهٔ حقوقی نیست؛ زمینه در [ADR-0022](../architecture/architecture-decision-records/ADR-0022-commercial-platforms-not-adopted.md) و [product-benchmark.md](../benchmark/product-benchmark.md).
+- **هدف:** ماتریس تکمیل‌شده و تأییدشده توسط واحد انطباق پیش از M6؛ نظر حقوقی Q-24 و فهرست مجوزهای OSS (SBOM با نوع لایسنس) پیش از G-PoC برای اجزای PoC و پیش از M2 برای bundle.
+- **راستی‌آزمایی:** بازبینی انطباق؛ گزارش لایسنس از SBOM (NFR-SEC-007).
+- **فاز/وضعیت:** P0.5→P6 / Blocked، **[باز Q-10]**، **[باز Q-24]**، **[باز Q-25]**. ریسک R-13، R-16، R-18.
 
 ## ۱۵. نکات برای بازبینی
 

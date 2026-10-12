@@ -3,11 +3,11 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `ARC-COR-001` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (`1405/07/19`) |
 | Owner | `Architecture` |
-| Related documents | [ingestion-and-connectors.md](ingestion-and-connectors.md)، [security-and-threat-model.md](security-and-threat-model.md)، [ADR-0011](architecture-decision-records/ADR-0011-topology-model-and-dependency-discovery.md)، [ADR-0012](architecture-decision-records/ADR-0012-correlation-engine-design.md)، [ADR-0013](architecture-decision-records/ADR-0013-analytics-staging-rules-statistics-ml.md)، [ADR-0019](architecture-decision-records/ADR-0019-transaction-correlation-tiers.md)، [docs/requirements/](../requirements/)، [docs/testing/](../testing/)، [docs/roadmap/](../roadmap/) |
+| Related documents | [ingestion-and-connectors.md](ingestion-and-connectors.md)، [security-and-threat-model.md](security-and-threat-model.md)، [ADR-0011](architecture-decision-records/ADR-0011-topology-model-and-dependency-discovery.md)، [ADR-0012](architecture-decision-records/ADR-0012-correlation-engine-design.md)، [ADR-0013](architecture-decision-records/ADR-0013-analytics-staging-rules-statistics-ml.md)، [ADR-0019](architecture-decision-records/ADR-0019-transaction-correlation-tiers.md)، [ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)، [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)، [competitive-gap-analysis.md](../benchmark/competitive-gap-analysis.md)، [docs/requirements/](../requirements/)، [docs/testing/](../testing/)، [docs/roadmap/](../roadmap/) |
 
 **راهنمای برچسب‌ها:** [واقعیت] فقط F-01..F-03؛ [فرض A-xx]؛ [فرضیه] نیازمند EXP/BM؛ [توصیه]؛ [باز Q-xx].
 
@@ -18,7 +18,8 @@
 ## ۱. دامنه و جایگاه در معماری
 
 - ماژول‌های درگیر در `platform-core`: `health`، `events`، `correlation`، `anomaly`، `transactions`، `slo`، `incidents`، با استفاده از `catalog`، `topology`، `calendar`.
-- اجرا در نقش `analytics` به صورت micro-batch هر 30–60 s (موقت) با خواندن از ClickHouse و PostgreSQL؛ پردازش جریانی زیرثانیه‌ای هدف نیست (`NFR-PRF-004`: چرخهٔ ارزیابی ≤ 60 s).
+- اجرا در نقش `analytics` به صورت micro-batch هر 30–60 s (موقت) با خواندن از PostgreSQL (schema `telemetry`؛ ClickHouse فقط پس از Trigger [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md))؛ پردازش جریانی زیرثانیه‌ای هدف نیست (`NFR-PRF-004`: چرخهٔ ارزیابی ≤ 60 s).
+- [توصیه، 0.2] **جایگاه پس از Benchmark:** هیچ محصول بررسی‌شده «علت محتمل + شواهد + اطمینان عددی + شواهد نقض» را به‌صورت بومی ارائه نمی‌کند ([competitive-gap-analysis.md](../benchmark/competitive-gap-analysis.md))؛ این موتور هستهٔ تمایز سفارشی است و **کوچک و قطعی** نگه داشته می‌شود. منطق سلامت/propagation زیرساختی که Zabbix دارد بازسازی نمی‌شود؛ وضعیت سرویس و SLA در Zabbix به‌عنوان **شاهد** وارد می‌شود (§۴.۳، FR-INT-008). قواعد همبستگی/cause-symptom خود Zabbix (7.0+) نیز رویداد ورودی‌اند، نه جایگزین رتبه‌بندی.
 - [توصیه] موتور قطعی (deterministic) و قابل توضیح؛ بدون ML در ابتدا ([ADR-0012](architecture-decision-records/ADR-0012-correlation-engine-design.md)). هر عدد در این سند که با «پارامتر» مشخص شده، **مقدار اولیهٔ موقت** است، در پیکربندی قرار می‌گیرد (نه در کد) و با مجموعهٔ حوادث برچسب‌خورده تنظیم می‌شود (بخش ۹).
 
 ```mermaid
@@ -28,6 +29,7 @@ flowchart LR
     E[Events: alerts, problems, changes]
     T[TransactionSummary L0..L2]
     SH[Source health / freshness]
+    ZS[Zabbix service status / SLA SLI<br/>service.get, sla.getsli]
     CAL[Calendar: ServiceWindow, MaintenanceWindow]
     TOP[Topology + confidence]
   end
@@ -35,6 +37,8 @@ flowchart LR
   T --> IND
   IND --> HS[Health state per Component / Service]
   SH --> HS
+  ZS --> HS
+  ZS --> COR
   CAL --> HS
   E --> EP[Event pipeline<br/>normalize-dedup-group]
   HS --> EP
@@ -59,6 +63,10 @@ flowchart LR
 
 ### ۲.۲ ترتیب محاسبهٔ `HealthState` برای یک BusinessService
 
+[توصیه، 0.2] هر `HealthState` با ویژگی **`derivation ∈ {DIRECT, INFERRED}`** ذخیره و نمایش داده می‌شود ([data-architecture.md](data-architecture.md) §۳.۱۱): `DIRECT` وقتی وضعیت از indicatorهای خود موجودیت (KPI تراکنش، متریک) یا از وضعیت سرویس متناظر در Zabbix به دست آمده باشد؛ `INFERRED` فقط در گام 6 زیر. UI وضعیت `INFERRED` را با نماد جداگانه و متن «استنتاج از وابستگی، KPI مستقیم در دسترس نیست» نشان می‌دهد و اعلان سطح Incident بر پایهٔ وضعیت صرفاً `INFERRED` ارسال نمی‌شود (پارامتر قابل تغییر).
+
+**وضعیت سرویس Zabbix به‌عنوان indicator (FR-INT-008، مشروط به PoC-1):** اگر یک TechnicalService یا Component با ExternalRef به سرویس Zabbix نگاشت شده باشد، وضعیت آن سرویس (`service.get`) یک indicator از نوع `SUPPORTING` با `derivation = DIRECT` است؛ برای BusinessService هرگز indicator `PRIMARY` نیست، چون معنای کسب‌وکار (موفقیت تراکنش، تقویم) را ندارد. SLI حاصل از `sla.getsli` فقط برای مقایسه با SLO پلتفرم و گزارش استفاده می‌شود و در محاسبهٔ لحظه‌ای سلامت وارد نمی‌شود.
+
 | گام | شرط | نتیجه |
 |---|---|---|
 | 1 | `MaintenanceWindow` فعال برای سرویس (یا همهٔ اجزای ضروری آن) | `MAINTENANCE`؛ وضعیت زیرین محاسبه و در جزئیات نمایش داده می‌شود؛ اعلان سرکوب می‌شود (`FR-NTF-002`, `FR-CAL-003`) |
@@ -66,7 +74,7 @@ flowchart LR
 | 3 | پوشش freshness کمتر از `coverage_min` (پارامتر، پیش‌فرض 0.6 وزنی) برای indicatorهای `PRIMARY` | `UNKNOWN` با فهرست منابع کهنه (`FR-HLT-003`) |
 | 4 | داخل پنجرهٔ سرویس، ترافیک ≈ صفر در حالی که baseline حجم انتظار بیش از `min_expected_volume` دارد | «غیرفعال غیرعادی» (`FR-CAL-004`) → `CRITICAL` یا `DEGRADED` طبق شدت |
 | 5 | ارزیابی indicatorهای `PRIMARY` تازه | بدترین وضعیت در میان indicatorهای `PRIMARY` (با hysteresis) |
-| 6 | اگر سرویس هیچ indicator `PRIMARY` تازه ندارد ولی وابستگی سخت (`criticality=HARD`) در `CRITICAL` است | وضعیت **استنتاجی** حداکثر `DEGRADED` با برچسب «inferred from dependency»؛ در غیر این صورت `UNKNOWN` |
+| 6 | اگر سرویس هیچ indicator `PRIMARY` تازه ندارد ولی وابستگی سخت (`criticality=HARD`) در `CRITICAL` است (از جمله وضعیت `CRITICAL` سرویس Zabbix متناظر) | وضعیت **استنتاجی** حداکثر `DEGRADED` با `derivation = INFERRED`؛ در غیر این صورت `UNKNOWN` |
 | 7 | اثر وابستگی وقتی سرویس KPI تازه دارد | وضعیت سرویس را تغییر نمی‌دهد؛ فقط حاشیهٔ «اجزای در معرض خطر» (impact annotation) اضافه می‌شود (`FR-HLT-002`) |
 
 ### ۲.۳ Freshness → `UNKNOWN`
@@ -129,6 +137,8 @@ flowchart LR
 | `SATURATION` | CPU/حافظه/connection pool/thread pool/دیسک نزدیک سقف | 0.5 | Zabbix/SolarWinds/JMX/DMV |
 | `CHANGE` | Deployment/ConfigChange روی کاندید در lookback | 0.6 | ثبت change (دستی یا منبع) |
 | `SOURCE_ALERT` | alert فعال در Zabbix/SolarWinds روی کاندید | 0.5 | Zabbix/SolarWinds |
+| `SERVICE_STATUS` (0.2) | سرویس Zabbix نگاشت‌شده به کاندید در وضعیت problem، همراه problemهای root cause آن (`service.get`) | 0.6 | سرویس/tag در Zabbix (PoC-1، FR-INT-008)؛ اگر root cause همان problem شاهد `SOURCE_ALERT` باشد، فقط یک‌بار شمرده می‌شود (بدون شمارش دوگانه) |
+| `SLA_BREACH` (0.2) | SLI دورهٔ جاری زیر SLO در Zabbix (`sla.getsli`) برای کاندید | 0.3 | SLA در Zabbix؛ شاهد کمکی و کندتغییر، نه علامت شروع |
 | `LOG_PATTERN` | رشد الگوی خطای مشخص (مثلاً connection refused به downstream) | 0.5 | query template مصوب |
 | `NETWORK_ERRORS` | خطا/discard interface، packet loss | 0.6 | SolarWinds/Zabbix + نگاشت component به segment |
 
@@ -384,6 +394,15 @@ sequenceDiagram
 
 ## ۱۱. نکته برای بازبینی
 
-- **«نکته برای بازبینی» (وضعیت استنتاجی):** گام 6 در §۲.۲ اجازه می‌دهد سرویس بدون KPI تازه از وابستگی سخت حداکثر `DEGRADED` استنتاجی بگیرد. این با `FR-HLT-002` («انتشار به عنوان اثر نه علت») سازگار است ولی در enum `HealthState` نشانگر جداگانه‌ای برای «inferred» وجود ندارد؛ پیشنهاد می‌شود ویژگی `derivation ∈ {DIRECT, INFERRED}` کنار `HealthState` به canonical schema افزوده شود.
+- **وضعیت استنتاجی (حل‌شده در 0.2):** ویژگی `derivation ∈ {DIRECT, INFERRED}` کنار `HealthState` افزوده شد (§۲.۲ و [data-architecture.md](data-architecture.md) §۳.۱۱)؛ domain model و JSON Schema باید هم‌راستا شوند.
+- **«نکته برای بازبینی» (وزن‌های شاهد Zabbix):** وزن‌های `SERVICE_STATUS` (0.6) و `SLA_BREACH` (0.3) پیشنهاد اولیه‌اند و در PoC-4 روی حوادث تاریخی/مصنوعی سنجیده می‌شوند. استقلال منابع (`independence`) باید Zabbix problem و Zabbix service را **یک منبع** حساب کند.
+- **نرمال‌سازی ارقام فارسی/عربی-هندی:** کدهای پاسخ و فیلدهای عددی در لاگ ممکن است ارقام فارسی داشته باشند؛ نرمال‌سازی ارقام پیش از detectorهای redaction و پیش از نگاشت `OutcomeMapping` لازم است. مالک این قاعده [security-and-threat-model.md](security-and-threat-model.md) (§ آشکارسازها، NFR-PRV-002) است و اینجا تکرار نمی‌شود.
 - **«نکته برای بازبینی» (L0 در `q_tier`):** وزن 0.7 برای L0 بیشتر از L1 (0.6) انتخاب شده چون شمارش تجمیعی دقیق است اما پیوند تراکنش ندارد؛ این ترتیب با ترتیب دقت tierها در ADR-0019 برای *پیوند تراکنش* متفاوت است و باید در بازبینی تأیید شود.
 - **«نکته برای بازبینی» (Document ID):** شناسهٔ `ARC-COR-001` توسط نویسنده انتخاب شده است.
+
+## ۱۲. تاریخچه تغییر
+
+| Version | Date | تغییر |
+|---|---|---|
+| 0.1 | 2026-10-11 | نسخه اولیه. |
+| 0.2 | 2026-10-12 | تغییر پس از Product Benchmark: وضعیت سرویس/SLA در Zabbix به‌عنوان شاهد (FR-INT-008)؛ `derivation` DIRECT/INFERRED برای `HealthState`؛ ارجاع نرمال‌سازی ارقام به سند امنیت؛ Store پیش‌فرض PostgreSQL. |

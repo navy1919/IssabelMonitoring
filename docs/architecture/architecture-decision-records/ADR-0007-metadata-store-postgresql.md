@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0007 | metadata-store-postgresql | Proposed | Firm | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [technology-evaluation.md §۶](../technology-evaluation.md)، [data-architecture.md](../data-architecture.md)، [capacity-planning.md §۴.۵](../capacity-planning.md)، [ADR-0011](ADR-0011-topology-model-and-dependency-discovery.md)
 
 ## Context

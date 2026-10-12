@@ -4,7 +4,9 @@
 |---|---|---|---|---|---|
 | ADR-0017 | ha-dr-architecture | Proposed | **Blocked (Q-05)** | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
-Related documents: [capacity-planning.md §۴.۶](../capacity-planning.md)، [deployment-and-runbooks.md](../../operations/deployment-and-runbooks.md)، [ADR-0007](ADR-0007-metadata-store-postgresql.md)، [ADR-0008](ADR-0008-telemetry-store-clickhouse.md)
+Version: `0.2` — تاریخچه تغییر در انتهای سند.
+
+Related documents: [capacity-planning.md §۴.۶](../capacity-planning.md)، [deployment-and-runbooks.md](../../operations/deployment-and-runbooks.md)، [ADR-0007](ADR-0007-metadata-store-postgresql.md)، [ADR-0008](ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)
 
 ## Context
 
@@ -15,10 +17,10 @@ Related documents: [capacity-planning.md §۴.۶](../capacity-planning.md)، [de
 ## Decision
 
 1. **درون سایت:** گره‌های stateless `platform-core` به‌صورت active-active پشت Load Balancer (حداقل ۲ به ازای نقش در Medium)؛ لبه‌ها ۲ گره به ازای Zone در Medium+.
-2. **PostgreSQL:** streaming replication با standby هم‌زمان در سایت و async در DR؛ failover خودکار با **Patroni** در فاز ۶.
-3. **ClickHouse:** Low تک‌گره + Backup؛ Medium+ `ReplicatedMergeTree` با RF=2 و **Keeper سه‌گرهی**.
-4. **DR:** active-passive؛ PostgreSQL async replica + ClickHouse یا replica در DR یا بازیابی از Backup (انتخاب بر اساس Q-05 و هزینه دیسک — [capacity-planning.md](../capacity-planning.md)). لبه‌ها پیکربندی دو مقصد (اصلی/DR) دارند.
-5. **استقلال failure domain:** پلتفرم برای **کارکرد خود** به Elasticsearch، Splunk، Zabbix یا Kafka بانک وابسته نیست (آن‌ها فقط منبع داده‌اند)؛ زیرساخت مشترک (DNS، NTP، IdP، ذخیره‌ساز) شناسایی و برای هر کدام حالت تخریب تدریجی تعریف می‌شود.
+2. **PostgreSQL:** streaming replication با standby هم‌زمان در سایت و async در DR؛ failover خودکار با **Patroni** در فاز ۶. پس از Product Benchmark، PostgreSQL علاوه بر metadata، سری‌های KPI مشتق‌شده را هم نگه می‌دارد ([ADR-0008](ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md))، پس تنها مخزن stateful پلتفرم است و HA آن از Medium به بعد الزامی است.
+3. **ClickHouse (فقط اگر triggerهای ADR-0008 فعال شوند):** در آن صورت `ReplicatedMergeTree` با RF=2 و **Keeper سه‌گرهی**؛ تا آن زمان هیچ جزء HA مربوط به ClickHouse مستقر نمی‌شود.
+4. **DR:** active-passive؛ PostgreSQL async replica (و در صورت وجود ClickHouse، replica در DR یا بازیابی از Backup) (انتخاب بر اساس Q-05 و هزینه دیسک — [capacity-planning.md](../capacity-planning.md)). `connector-runtime` و لبه‌های اختیاری پیکربندی دو مقصد (اصلی/DR) دارند.
+5. **استقلال failure domain:** پلتفرم برای **کارکرد خود** به Elasticsearch، Splunk، Zabbix یا Kafka بانک وابسته نیست (آن‌ها فقط منبع داده‌اند)؛ اما در گزینهٔ E ([ADR-0021](ADR-0021-build-buy-reuse-strategy.md)) **ارزش تحلیلی** پلتفرم به دسترس‌پذیری همین منابع وابسته است: اگر منبعی در خود حادثه از دست برود، سیگنال‌های آن `UNKNOWN` نمایش داده می‌شوند و خودِ قطع منبع به‌عنوان شاهد ثبت می‌شود (R-15)؛ زیرساخت مشترک (DNS، NTP، IdP، ذخیره‌ساز) شناسایی و برای هر کدام حالت تخریب تدریجی تعریف می‌شود.
 6. self-monitoring و صفحه سلامت مستقل (NFR-OBS-001).
 
 ## Alternatives considered
@@ -37,7 +39,7 @@ Related documents: [capacity-planning.md §۴.۶](../capacity-planning.md)، [de
 ## Consequences
 
 - مثبت: پلتفرم در زمان قطعی منابع کار می‌کند و قطعی را نشان می‌دهد.
-- منفی: دیسک ClickHouse ×۲ تا ×۳ (RF و DR)؛ اجزای Patroni/DCS و Keeper.
+- منفی: اجزای Patroni/DCS؛ و تنها در صورت فعال شدن trigger، دیسک ClickHouse ×۲ تا ×۳ (RF و DR) و Keeper.
 - هزینه عملیاتی: تمرین دوره‌ای failover و DR (BM-09)، runbook.
 
 ## Evidence that would change this decision
@@ -49,6 +51,10 @@ Related documents: [capacity-planning.md §۴.۶](../capacity-planning.md)، [de
 ## Related requirements
 
 NFR-AVL-001، NFR-AVL-002، NFR-AVL-003، NFR-REL-002، NFR-REL-004، NFR-OBS-001، FR-ADM-006
+
+## تاریخچه تغییر
+
+- 0.2 — تغییر پس از Product Benchmark: هم‌راستا با ADR-0008 (PostgreSQL اول، ClickHouse مشروط) و ADR-0021.
 
 ## Related questions
 

@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0006 | canonical-schemas-otel-plus-bank-namespace | Proposed | Firm | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [data-architecture.md](../data-architecture.md)، [domain-model.md](../../vision/domain-model.md)، [ADR-0005](ADR-0005-api-and-event-contracts.md)، [ADR-0019](ADR-0019-transaction-correlation-tiers.md)
 
 ## Context

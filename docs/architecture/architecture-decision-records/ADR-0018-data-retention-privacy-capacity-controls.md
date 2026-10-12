@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0018 | data-retention-privacy-capacity-controls | Proposed | **Firm** (قواعد حریم خصوصی) / **Provisional** (اعداد retention — Q-16، Q-10) | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [security-and-threat-model.md](../security-and-threat-model.md)، [data-architecture.md](../data-architecture.md)، [capacity-planning.md](../capacity-planning.md)
 
 ## Context

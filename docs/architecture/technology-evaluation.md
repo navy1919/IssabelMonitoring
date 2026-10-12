@@ -3,11 +3,11 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `ARC-TECH-EVAL` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (۱۴۰۵/۰۷/۱۹) |
 | Owner | `Architecture` |
-| Related documents | [ADR index](architecture-decision-records/README.md)، [capacity-planning.md](capacity-planning.md)، [container-architecture.md](container-architecture.md)، [system-context.md](system-context.md) |
+| Related documents | [ADR index](architecture-decision-records/README.md)، [capacity-planning.md](capacity-planning.md)، [container-architecture.md](container-architecture.md)، [system-context.md](system-context.md)، [product-benchmark.md](../benchmark/product-benchmark.md)، [competitive-gap-analysis.md](../benchmark/competitive-gap-analysis.md)، [build-buy-reuse-analysis.md](../benchmark/build-buy-reuse-analysis.md) |
 
 > **برچسب‌گذاری:** [واقعیت] فقط برای F-01..F-03؛ [فرض A-xx] فرض موقت؛ [فرضیه] نیازمند آزمایش/بنچمارک؛ [توصیه]؛ [باز Q-xx] وابسته به پرسش باز.
 > هیچ‌یک از امتیازهای این سند حاصل اندازه‌گیری نیست. همه امتیازها **قضاوت مهندسی پیش از بنچمارک** هستند و باید با نتایج BM-01..BM-10 (نگاه کنید به [capacity-planning.md](capacity-planning.md#benchmark-plan)) و پاسخ پرسش‌های باز جایگزین شوند.
@@ -26,11 +26,24 @@
 | Frontend، نمودار، گراف | [ADR-0014](architecture-decision-records/ADR-0014-frontend-react-echarts-cytoscape.md) | Proposed – Provisional |
 | پایگاه داده رابطه‌ای | [ADR-0007](architecture-decision-records/ADR-0007-metadata-store-postgresql.md) | Proposed – Firm |
 | جستجوی لاگ/رویداد | [ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md) | Proposed – Firm (فازهای ۱ تا ۵) |
-| سری زمانی و تحلیلی | [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-clickhouse.md) | Proposed – Provisional |
+| سری زمانی و تحلیلی | [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md) | Proposed – Provisional |
 | Streaming | [ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md) | Proposed – Provisional |
 | Cache | (بدون ADR مستقل؛ در ADR-0002 و ADR-0010 ارجاع شده) | — |
 
 خارج از دامنه: انتخاب سیستم‌عامل، ارکستراسیون (ADR-0016) و IdP (ADR-0015) که به پرسش‌های باز Q-02، Q-03 و Q-04 وابسته‌اند.
+
+### ۱.۱ به‌روزرسانی پس از Product Benchmark (0.2)
+
+[توصیه] Benchmark محصولات ([product-benchmark.md](../benchmark/product-benchmark.md))، تحلیل شکاف ([competitive-gap-analysis.md](../benchmark/competitive-gap-analysis.md)) و تحلیل ساخت/خرید/بازاستفاده ([build-buy-reuse-analysis.md](../benchmark/build-buy-reuse-analysis.md)) پرسش «کدام فناوری برای ساختن» را به «چه چیزی اصلاً ساخته شود» تغییر داد ([ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)، گزینه E). امتیازهای بخش‌های ۳ تا ۱۱ (ارزیابی فناوری درون هر دسته) دست نخورده‌اند، ولی نتیجهٔ چند دسته تغییر کرد:
+
+| دسته | نتیجهٔ 0.1 | نتیجهٔ 0.2 | دلیل (شواهد Benchmark) |
+|---|---|---|---|
+| Store سری زمانی/تحلیلی (§۸–۹) | ClickHouse از ابتدا | **PostgreSQL نخست** برای سری‌های KPI مشتق؛ ClickHouse با Trigger ([ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)) | پلتفرم متریک خام را ingest نمی‌کند؛ نرخ رکورد Reuse حدود ۱/۴۰ و حجم ذخیرهٔ آن حدود نصف own-ingestion است ([capacity-planning.md](capacity-planning.md))؛ ClickHouse عمدتاً برای رویداد تراکنش پرحجم توجیه دارد؛ TimescaleDB TSL و downsampling در VictoriaMetrics Enterprise است |
+| Streaming (§۱۰) | بدون Bus؛ بعداً Kafka | **Kafka فعلاً رد** ([ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)) | Kafka 4.0 فقط-KRaft ولی همچنان خوشهٔ stateful؛ صف `file_storage` و checkpoint کافی؛ ورودی Reuse زیر ۱k رکورد/ثانیه در Medium |
+| Collector (§۴) | OTel Collector + connector-runtime در هر zone | `connector-runtime` (با Prometheus scrape) + exporter `mq_prometheus`؛ **`edge-collector` اختیاری** ([ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md)) | receiver IBM MQ در OTel contrib وجود ندارد؛ منبع push در فازهای اولیه نیست |
+| نمایش (§۵) | همه در `web-ui`؛ Grafana فقط self-monitoring | `web-ui` فقط صفحات اپراتور؛ **Grafana OSS اختیاری** برای نمای مهندسی یا deep link ([ADR-0024](architecture-decision-records/ADR-0024-visualization-split-custom-operator-ui-optional-grafana.md)) | Grafana node graph و alerting کافی برای نمای فنی؛ شاهدی از RTL/جلالی در Grafana/Kibana/OSD یافت نشد؛ AGPL (Q-21) |
+| پلتفرم تجاری | خارج از ارزیابی | **اتخاذ نمی‌شود** ([ADR-0022](architecture-decision-records/ADR-0022-commercial-platforms-not-adopted.md)) | تحریم (ITSR/EAR، E.O. 13902)؛ شکاف تقویم کسب‌وکار و معنای بانکی |
+| بک‌اند (§۳) | Java؛ رقیب .NET 8 | گزینهٔ .NET = **.NET 10** ([ADR-0003](architecture-decision-records/ADR-0003-backend-language-java-spring-boot.md)) | پایان پشتیبانی .NET 8 حدود نوامبر 2026 (نیازمند تأیید) |
 
 ---
 
@@ -493,18 +506,19 @@
 | دسته | انتخاب | امتیاز / رقیب نزدیک | ADR | قطعیت |
 |---|---|---|---|---|
 | بک‌اند | Java 21 + Spring Boot 3.x | 4.50 / Kotlin 4.00، .NET 3.90 | ADR-0003 | Blocked (Q-01) |
-| Collector | OTel Collector + Java connector-runtime | 4.15 / Fluent Bit 3.70 | ADR-0004 | Provisional |
+| Collector | Java connector-runtime (+ Prometheus scrape، exporter `mq_prometheus`)؛ OTel Collector اختیاری (0.2) | 4.15 / Fluent Bit 3.70 | ADR-0004 | Provisional |
 | Frontend | React + TS | 4.70 / Angular 4.05 | ADR-0014 | Provisional |
 | نمودار | Apache ECharts | 4.80 / Highcharts 4.20 | ADR-0014 | Provisional |
 | گراف | Cytoscape.js | 4.45 / G6 4.35 | ADR-0014 | Provisional (BM-10) |
 | رابطه‌ای | PostgreSQL | 4.40 / MySQL، SQL Server 3.80 | ADR-0007 | Firm |
 | لاگ/جستجو | Federate | 4.10 / ClickHouse 3.35 | ADR-0009 | Firm (P1–P5) |
-| سری زمانی | ClickHouse | 4.36 / VictoriaMetrics 3.76 | ADR-0008 | Provisional (BM-01..03) |
-| تحلیلی | ClickHouse (بدون Store جدا) | 4.55 / DuckDB 3.60 | ADR-0008 | Provisional |
-| Streaming | بدون Bus؛ بعداً Kafka | W-now 4.10 / NATS 4.05؛ W-scale Kafka 4.50 | ADR-0010 | Provisional |
+| سری زمانی | **PostgreSQL نخست** (0.2)؛ ClickHouse با Trigger (امتیاز فنی 4.36 / VictoriaMetrics 3.76 برای حالت Trigger معتبر می‌ماند) | — | ADR-0008 | Provisional (PoC-5، BM-02/03) |
+| تحلیلی | همان PostgreSQL (0.2)؛ ClickHouse با Trigger | 4.55 / DuckDB 3.60 (حالت Trigger) | ADR-0008 | Provisional |
+| Streaming | بدون Bus؛ **Kafka فعلاً رد** (0.2) | W-now 4.10 / NATS 4.05؛ W-scale Kafka 4.50 | ADR-0010 | Provisional |
+| نمای مهندسی (0.2) | deep link؛ Grafana OSS اختیاری | — | ADR-0024 | Provisional (Q-21، Q-23) |
 | Cache | بدون Cache خارجی؛ بعداً Valkey | 4.70 / Valkey 3.65 | — | Provisional |
 
-تعداد فناوری‌های stateful در شروع: **دو** (PostgreSQL و ClickHouse) به‌اضافه ClickHouse Keeper در Medium+ و Keycloak در صورت نبود IdP بانک.
+تعداد فناوری‌های stateful در شروع (0.2): **یک** (PostgreSQL) به‌اضافه Keycloak در صورت نبود IdP بانک و Grafana اختیاری؛ ClickHouse و Keeper فقط پس از Trigger.
 
 ---
 
@@ -518,9 +532,19 @@
 | Q-09 | وجود Kafka، Vault/HSM، رجیستری artifact داخلی | Streaming، SecretProvider، ساخت آفلاین |
 | Q-21 | سیاست مجوز Open Source (AGPL، BSL، SSPL، TSL) و امکان تهیه مجوز تجاری | همه دسته‌ها |
 | Q-22 | سهمیه جستجوی Splunk/ES برای بار اضافی | ADR-0009 |
+| Q-23 (0.2) | الزامی بودن UI فارسی RTL/جلالی برای اپراتور | ADR-0014، ADR-0024 |
+| Q-24، Q-25 (0.2) | نظر حقوقی دربارهٔ تحریم؛ مجوز/به‌روزرسانی Splunk، SolarWinds، IBM MQ موجود | ADR-0016، ADR-0021، ADR-0022 |
 | — (پیشنهاد افزودن به Q-03) | آیا بانک فهرست DBMS مجاز سازمانی دارد؟ | ADR-0007 |
 
 ## ۱۴. نکته برای بازبینی
 
 1. اعداد امتیاز در این سند قضاوت تیم معماری است، نه اندازه‌گیری. [توصیه] در جلسه بازبینی تصمیم، دست‌کم یک نماینده عملیات و یک نماینده امنیت امتیازهای C07 و C10 را مستقل امتیاز دهند و میانگین گرفته شود.
-2. ریسک تحریم/دسترسی به باینری‌ها: حتی برای محصولات Open Source، دسترسی به مخازن رسمی (مثلاً Docker Hub، Maven Central، npm، مخازن فروشنده) ممکن است از ایران محدود باشد. این موضوع در R-09 پوشش داده شده ولی [توصیه] به‌عنوان معیار صریح در ADR-0016 اضافه شود.
+2. ریسک تحریم/دسترسی به باینری‌ها: حتی برای محصولات Open Source، دسترسی به مخازن رسمی (مثلاً Docker Hub، Maven Central، npm، مخازن فروشنده) ممکن است از ایران محدود باشد. در 0.2 به‌عنوان معیار صریح در ADR-0016 (بند ۷) اضافه شد.
+3. (0.2) امتیازهای §۸–۹ با فرض ingest خام محاسبه شده‌اند و برای «حالت Trigger» معتبرند؛ ارزیابی PostgreSQL به‌عنوان Store پیش‌فرض بر پایهٔ حجم سناریوی Reuse است، نه امتیاز وزنی جدید، و با PoC-5 تأیید می‌شود.
+
+## ۱۵. تاریخچه تغییر
+
+| Version | Date | تغییر |
+|---|---|---|
+| 0.1 | 2026-10-11 | نسخه اولیه. |
+| 0.2 | 2026-10-12 | تغییر پس از Product Benchmark: §۱.۱ (پیوند به اسناد benchmark، PostgreSQL نخست، Kafka رد، Grafana اختیاری برای نمای مهندسی، edge-collector اختیاری، .NET 10)؛ به‌روزرسانی جدول جمع‌بندی. |

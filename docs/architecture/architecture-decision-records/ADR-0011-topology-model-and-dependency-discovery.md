@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0011 | topology-model-and-dependency-discovery | Proposed | **Provisional** (EXP-01، EXP-02، Q-08) | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [domain-model.md](../../vision/domain-model.md)، [data-architecture.md](../data-architecture.md)، [ADR-0007](ADR-0007-metadata-store-postgresql.md)، [ADR-0012](ADR-0012-correlation-engine-design.md)
 
 ## Context

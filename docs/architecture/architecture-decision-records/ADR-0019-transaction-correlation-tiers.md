@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0019 | transaction-correlation-tiers | Proposed | Firm | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [correlation-and-intelligence.md](../correlation-and-intelligence.md)، [data-architecture.md](../data-architecture.md)، [ADR-0006](ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)، [ADR-0018](ADR-0018-data-retention-privacy-capacity-controls.md)
 
 ## Context

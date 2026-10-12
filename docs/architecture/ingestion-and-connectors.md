@@ -3,11 +3,11 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `ARC-ING-001` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (`1405/07/19`) |
 | Owner | `Architecture` |
-| Related documents | [correlation-and-intelligence.md](correlation-and-intelligence.md)، [security-and-threat-model.md](security-and-threat-model.md)، [ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md)، [ADR-0005](architecture-decision-records/ADR-0005-api-and-event-contracts.md)، [ADR-0006](architecture-decision-records/ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)، [ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)، [ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، [docs/requirements/](../requirements/)، [docs/testing/](../testing/)، [docs/operations/](../operations/) |
+| Related documents | [correlation-and-intelligence.md](correlation-and-intelligence.md)، [security-and-threat-model.md](security-and-threat-model.md)، [ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md)، [ADR-0005](architecture-decision-records/ADR-0005-api-and-event-contracts.md)، [ADR-0006](architecture-decision-records/ADR-0006-canonical-schemas-otel-plus-bank-namespace.md)، [ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)، [ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، [ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)، [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)، [product-benchmark.md](../benchmark/product-benchmark.md)، [docs/requirements/](../requirements/)، [docs/testing/](../testing/)، [docs/operations/](../operations/) |
 
 **راهنمای برچسب‌ها:** [واقعیت] فقط F-01..F-03؛ [فرض A-xx] فرض موقت؛ [فرضیه] نیازمند آزمایش (EXP/BM)؛ [توصیه] پیشنهاد معماری؛ [باز Q-xx] وابسته به پرسش باز. هر دانش مربوط به API یا متریک فروشنده که از مستندات عمومی آمده با عبارت «نیازمند تأیید در نسخه نصب‌شده بانک» مشخص شده است.
 
@@ -17,7 +17,7 @@
 
 این سند نحوهٔ ورود داده از سامانه‌های موجود بانک (Zabbix، SolarWinds، Splunk، Elasticsearch/OpenSearch) و منابع میان‌افزاری و زیرساختی (IBM MQ، RabbitMQ، F5، HAProxy، NGINX، Kubernetes، SQL Server، JMX) به `platform-core` را تعریف می‌کند؛ شامل:
 
-- سه الگوی جمع‌آوری: pull از طریق `connector-runtime`، push از طریق `edge-collector` (OTLP و پروتکل‌های استاندارد) و import فایلی؛
+- سه الگوی جمع‌آوری: pull از طریق `connector-runtime` (شامل Prometheus scrape)، push از طریق `edge-collector` **اختیاری** (OTLP و پروتکل‌های استاندارد) و import فایلی؛
 - قرارداد Connector SDK (`FR-ING-001`)؛
 - طراحی هر Connector به تفکیک منبع؛
 - خط لولهٔ نرمال‌سازی، redaction، dedup، دادهٔ دیررس، buffering/backpressure و نرمال‌سازی زمان؛
@@ -25,9 +25,18 @@
 
 [واقعیت] شروع کار باید با استفاده از SolarWinds، Zabbix، Splunk و Elasticsearch موجود باشد و instrumentation مستقیم برنامه‌ها به فازهای بعد موکول شده است (F-02). بنابراین این سند فرض می‌کند در فازهای ۲ تا ۵ تقریباً تمام داده از ابزارهای موجود و APIهای فقط‌خواندنی به‌دست می‌آید و ذخیرهٔ log خام انجام نمی‌شود ([ADR-0009](architecture-decision-records/ADR-0009-no-own-raw-log-store-federate-existing.md)).
 
+### ۱.۱ تغییر پس از Product Benchmark (0.2)
+
+[توصیه] با راهبرد Reuse-first ([ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)):
+- **Splunk/ES:** KPI تراکنش با saved search/aggregation **درون خود Splunk/ES** محاسبه می‌شود. پلتفرم تعریف را تولید می‌کند، مدیر منبع نصب می‌کند ([باز Q-28])، و connector فقط نتیجهٔ تجمیع دقیقه‌ای را می‌کشد (§۵.۱).
+- **IBM MQ:** از exporter رسمی IBM `mq_prometheus` (Apache-2.0) که `connector-runtime` آن را scrape می‌کند، یا از itemهای موجود Zabbix؛ PCF مستقیم فقط در صورت شکاف (§۵).
+- **Zabbix:** علاوه بر problemها و itemهای مرتبط با KPI، وضعیت سرویس و SLI از `service.get`/`sla.getsli` خوانده می‌شود (FR-INT-008)؛ همگام‌سازی تقویم به maintenance در Zabbix (FR-CAL-008) قابلیت **اختیاری و پیش‌فرض خاموش** است (§۵.۲).
+- **فقط سری‌های مرتبط با KPI** ingest می‌شوند؛ بقیه با drill-down درخواستی ([ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)).
+- **`edge-collector` اختیاری** است ([ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md))؛ Kafka فعلاً رد ([ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)).
+
 ## ۲. اصول طراحی
 
-1. **[توصیه] فقط‌خواندنی و کم‌اثر:** هیچ Connector حق تغییر پیکربندی، وضعیت یا داده در منبع را ندارد (`NFR-SEC-003`, `NFR-IMP-002`, [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)).
+1. **[توصیه] فقط‌خواندنی و کم‌اثر:** هیچ Connector حق تغییر پیکربندی، وضعیت یا داده در منبع را ندارد (`NFR-SEC-003`, `NFR-IMP-002`, [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)). تنها استثنا قابلیت اختیاری و پیش‌فرض خاموش همگام‌سازی تقویم به Zabbix است (§۵.۲) که در connector جداگانه با حساب جداگانه اجرا می‌شود.
 2. **[توصیه] اتصال خروجی از Zone:** همهٔ اتصال‌ها به سامانه‌های منبع فقط از `connector-runtime` همان zone آغاز می‌شود؛ `platform-core` هرگز به داخل zoneها اتصال برقرار نمی‌کند (`NFR-SEC-010`).
 3. **[توصیه] Redaction دولایه:** در لبه (Connector/Collector) و دوباره در ingestion (`NFR-PRV-002`).
 4. **[توصیه] At-least-once + idempotent:** هر رکورد ممکن است بیش از یک بار برسد؛ نوشتن باید idempotent باشد (`NFR-REL-001`).
@@ -45,40 +54,42 @@ flowchart LR
     SPL[Splunk REST]
     ES[Elasticsearch _search]
     MQ[IBM MQ QMgr]
-    F5[F5 iControl REST]
-    APP[Apps / exporters]
+    MQX[mq_prometheus exporter]
+    F5[F5 iControl REST - only if gap]
+    APP[Apps - later]
     CR[connector-runtime]
-    EC[edge-collector<br/>disk queue + redaction]
-    ZBX -->|pull| CR
+    EC[edge-collector - optional<br/>disk queue + redaction]
+    ZBX -->|pull items, problems, service.get, sla.getsli| CR
     SW -->|pull| CR
-    SPL -->|pull| CR
-    ES -->|pull| CR
-    MQ -->|pull PCF / REST| CR
-    F5 -->|pull| CR
-    APP -->|OTLP / Prom scrape / syslog| EC
+    SPL -->|pull saved-search results| CR
+    ES -->|pull aggregation results| CR
+    MQ -->|PCF inquire| MQX
+    MQX -->|Prometheus scrape| CR
+    F5 -.->|pull| CR
+    APP -.->|OTLP / syslog| EC
   end
   subgraph MZ["monitoring-zone"]
     ING["platform-core (role: ingest)"]
     API["platform-core (role: api)"]
     PG[(metadata-db PostgreSQL)]
-    CH[(telemetry-store ClickHouse)]
+    CH[(telemetry-store ClickHouse<br/>only on trigger)]
     FILE[File import UI/CLI]
   end
   CR -->|"GET config (mTLS)"| API
   CR -->|"long-poll /internal/v1/commands"| API
   CR -->|"OTLP/HTTP + /internal/v1/ingest/events (mTLS)"| ING
-  EC -->|"OTLP gRPC/HTTP (mTLS)"| ING
+  EC -.->|"OTLP gRPC/HTTP (mTLS)"| ING
   FILE --> ING
-  ING --> CH
-  ING --> PG
+  ING -->|"derived KPI series, events (schema telemetry)"| PG
+  ING -.-> CH
 ```
 
-*توضیح:* جهت همهٔ پیکان‌هایی که از مرز zone عبور می‌کنند از zone منبع به سمت `monitoring-zone` است. دستورات evidence query نیز با long-poll توسط خود `connector-runtime` دریافت می‌شوند ([ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md)).
+*توضیح:* خط‌چین = اختیاری یا مشروط. جهت همهٔ پیکان‌هایی که از مرز zone عبور می‌کنند از zone منبع به سمت `monitoring-zone` است. دستورات evidence query نیز با long-poll توسط خود `connector-runtime` دریافت می‌شوند ([ADR-0004](architecture-decision-records/ADR-0004-collector-and-connector-architecture.md)).
 
 | الگو | کاربرد | جزء اجرایی | مزیت | محدودیت |
 |---|---|---|---|---|
-| Pull از API فروشنده | Zabbix، SolarWinds، Splunk، ES، IBM MQ، RabbitMQ، F5، HAProxy stats، NGINX، SQL Server، JMX | `connector-runtime` (Java، Connector SDK) | بدون نیاز به تغییر در منبع؛ کنترل دقیق query budget | تأخیر برابر با poll interval؛ بار روی منبع |
-| Push / scrape استاندارد | OTLP (فاز ۷ برای برنامه‌ها)، Prometheus scrape، syslog، filelog، SNMP (فاز ۴) | `edge-collector` (توزیع سفارشی OpenTelemetry Collector) | پروتکل استاندارد؛ صف دیسکی؛ تأخیر کم | گاهی نیازمند فعال‌سازی exporter یا ارسال syslog در منبع است (تابع `NFR-IMP-002`) |
+| Pull از API فروشنده و Prometheus scrape | Zabbix (+ سرویس/SLA)، SolarWinds، نتایج saved search در Splunk/ES، exporter `mq_prometheus`؛ فقط در صورت شکاف: RabbitMQ، F5، HAProxy stats، NGINX، SQL Server، JMX | `connector-runtime` (Java، Connector SDK) | بدون نیاز به تغییر در منبع؛ کنترل دقیق query budget | تأخیر برابر با poll interval؛ بار روی منبع |
+| Push / scrape استاندارد (**اختیاری**) | OTLP (فاز ۷ برای برنامه‌ها)، Prometheus scrape در zoneهای بدون `connector-runtime`، syslog، filelog، SNMP (فاز ۴) | `edge-collector` (توزیع سفارشی OpenTelemetry Collector) | پروتکل استاندارد؛ صف دیسکی؛ تأخیر کم | گاهی نیازمند فعال‌سازی exporter یا ارسال syslog در منبع است (تابع `NFR-IMP-002`) |
 | Import فایلی | منابع غیرقابل‌دسترس شبکه‌ای، داده‌های تاریخی برای baseline و replay حادثه، خروجی‌های دستی | `platform-core` نقش `ingest` (UI/CLI) | امکان کار آفلاین؛ مناسب EXP-01 و replay حوادث VS-1 | غیربلادرنگ؛ نیازمند کنترل منشأ فایل |
 
 ### ۳.۱ Pull از طریق `connector-runtime`
@@ -86,8 +97,9 @@ flowchart LR
 - [توصیه] یک نمونه (یا جفت HA در فاز ۶) در هر zone منبع. `connector-runtime` پیکربندی `ConnectorInstance`ها را از `connectors-control` با REST/mTLS می‌گیرد، زمان‌بندی را محلی اجرا می‌کند و خروجی را با OTLP/HTTP (متریک) و `/internal/v1/ingest/events` (رویداد، `TransactionSummary`، `TransactionEvent` توکنیزه) ارسال می‌کند.
 - [توصیه] `connector-runtime` بافر محلی دیسکی کوچکی برای batchهای ارسال‌نشده دارد، اما منبع اصلی بازیابی، **checkpoint** است: پس از قطعی، Connector از آخرین checkpoint تأییدشده دوباره از منبع می‌خواند (اگر منبع تاریخچه نگه می‌دارد، مانند Zabbix history یا index در ES/Splunk). برای منابعی که فقط وضعیت لحظه‌ای دارند (مانند عمق صف MQ) داده‌ی دوران قطعی قابل بازیابی نیست و باید به صورت شکاف علامت بخورد.
 
-### ۳.۲ Push از طریق `edge-collector`
+### ۳.۲ Push از طریق `edge-collector` (اختیاری)
 
+- [توصیه، 0.2] فقط وقتی مستقر می‌شود که endpointهای Prometheus/OTLP باید در zoneای خوانده شوند که `connector-runtime` به آن دسترسی ندارد، یا برای instrumentation آینده و syslog/SNMP. در ترکیب پایهٔ Low/Medium وجود ندارد.
 - [توصیه] توزیع سفارشی contrib-based که به‌صورت آفلاین با OCB ساخته می‌شود ([ADR-0016](architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)). فقط componentهای لازم: receivers `otlp`، `prometheus`، `syslog`، `filelog`، (`snmp` در فاز ۴)؛ processors `memory_limiter`، `batch`، پردازندهٔ redaction (`transform`/`redaction` + قواعد بانکی)، `resource`؛ exporter `otlp`/`otlphttp` با `sending_queue` و extension `file_storage`. نام و رفتار دقیق componentها وابسته به نسخهٔ OTel Collector انتخاب‌شده است و در زمان build قفل می‌شود.
 - [فرض A-13] تأخیر دقیقه‌ای برای منابع pull قابل قبول است؛ push برای سیگنال‌هایی که تأخیر کمتر لازم دارند (`NFR-PRF-001`: p95 ≤ 30 s).
 
@@ -233,14 +245,14 @@ Connector داده را به canonical model تبدیل می‌کند: `Metric`�
 
 | منبع | روش / API | سیگنال‌ها | دسترسی لازم (حداقل) | اثر بر منبع و کنترل | محدودیت‌ها و پیش‌نیازها | FR |
 |---|---|---|---|---|---|---|
-| **Zabbix** | JSON-RPC (`api_jsonrpc.php`): `host.get`, `item.get`, `history.get`, `trend.get`, `problem.get`, `event.get`, `trigger.get` | متریک‌های host/OS، itemهای LB/MQ/DB اگر از قبل تعریف شده‌اند، problems/events، maintenance | کاربر API با نقش فقط‌خواندنی روی host groupهای مشخص؛ در نسخه‌های دارای User Role محدودسازی متدهای API؛ API token به‌جای رمز | `history.get` روی بازه‌های بزرگ بار DB Zabbix را بالا می‌برد → فقط itemهای نگاشت‌شده، بازه‌های کوتاه افزایشی، `trend.get` برای backfill طولانی، batch محدود itemids | itemهای موجود تعیین می‌کنند چه چیزی در دسترس است؛ history housekeeping بازهٔ backfill را محدود می‌کند؛ `eventid` برای checkpoint | `FR-INT-001`, `FR-RUN-004` |
+| **Zabbix** | JSON-RPC (`api_jsonrpc.php`): `host.get`, `item.get`, `history.get`, `trend.get`, `problem.get`, `event.get`, `trigger.get`؛ از 0.2: `service.get`, `sla.getsli`, `maintenance.get` | **فقط itemهای مرتبط با KPI** (host/OS، LB/RabbitMQ/MSSQL از قالب‌های رسمی، MQ اگر item موجود باشد)، problems/events، maintenance، وضعیت سرویس و SLI (§۵.۲)؛ سایر itemها با `history.get` درخواستی برای drill-down | کاربر API با نقش فقط‌خواندنی روی host groupهای مشخص؛ در نسخه‌های دارای User Role محدودسازی متدهای API؛ API token به‌جای رمز | `history.get` روی بازه‌های بزرگ بار DB Zabbix را بالا می‌برد → فقط itemهای نگاشت‌شده، بازه‌های کوتاه افزایشی، `trend.get` برای backfill طولانی، batch محدود itemids | itemهای موجود تعیین می‌کنند چه چیزی در دسترس است؛ history housekeeping بازهٔ backfill را محدود می‌کند؛ `eventid` برای checkpoint | `FR-INT-001`, `FR-RUN-004` |
 | **SolarWinds** | SWIS REST (SWQL query، پورت معمول 17778) روی entityهایی مانند `Orion.Nodes`, `Orion.NPM.Interfaces`, آمار ترافیک، alertهای فعال | وضعیت/پاسخ‌گویی node، ترافیک و خطای interface، CPU/حافظه، alertهای فعال، (در صورت ماژول) آمار LB/F5 | حساب Orion با دسترسی فقط‌خواندنی و limitation به گروه‌های مرتبط | SWQL روی DB Orion اجرا می‌شود؛ queryهای تاریخی سنگین ممنوع؛ فیلتر زمانی و `TOP` الزامی | نام entityها و ماژول‌ها (NPM/SAM/...) وابسته به لایسنس و نسخه | `FR-INT-004` |
-| **Splunk** | REST: `search/jobs` (oneshot/export با `earliest`/`latest`)، اجرای saved search یا خواندن نتیجهٔ saved search زمان‌بندی‌شده | per-minute counts به تفکیک outcome/latency از logs (L0)، رویدادهای توکنیزه (L2) در صورت وجود کلید، evidence query | نقش اختصاصی با دسترسی به indexهای مشخص، quota جست‌وجوی هم‌زمان و دیسک محدود، بدون قابلیت‌های admin | جست‌وجو search slot مصرف می‌کند (R-03، [باز Q-22]) → ترجیح: saved search زمان‌بندی‌شده توسط تیم Splunk (یا summary index) و فقط واکشی نتیجه؛ query templateها با `earliest/latest` محدود، `stats`/`tstats` به‌جای raw events | اثر لایسنس/workload بر حسب مدل لایسنس بانک نامعلوم است؛ نیازمند هماهنگی با admin | `FR-INT-003`, `FR-TXN-003` |
-| **Elasticsearch / OpenSearch** | `_search` با `size:0` و aggregations (`date_histogram`، `terms`، percentiles)، composite aggregation برای صفحه‌بندی، `search_after`/PIT برای رویدادها | per-minute counts/outcome/latency از logs، رویدادهای توکنیزه، evidence query | نقش با `read` و `view_index_metadata` روی index patternهای مشخص؛ در صورت لزوم `monitor` کلاستر برای تشخیص نسخه | aggregation با cardinality بالا و بازهٔ بزرگ پرهزینه است → سقف بازه، سقف buckets، `timeout` سمت سرور، استفاده از فیلد keyword | در برخی نسخه‌ها/لایسنس‌های قدیمی امنیت (احراز هویت/نقش) ممکن است فعال نباشد — ریسک امنیتی است و باید در EXP-02 بررسی شود؛ mapping فیلدها متفاوت است | `FR-INT-002`, `FR-TXN-003` |
-| **IBM MQ** | PCF از طریق client channel (مثلاً `INQUIRE_Q`, `INQUIRE_Q_STATUS`, `INQUIRE_CHANNEL_STATUS`) یا mqweb administrative REST API؛ گزینهٔ دیگر: اشتراک در topicهای آماری `$SYS/MQ/INFO/QMGR/...` (MQ 9+) | current depth، max depth، open input/output count، oldest message age، last get/put time، uncommitted msgs، channel status، نرخ enq/deq | **حداقل:** کاربر اختصاصی، SVRCONN channel اختصاصی با TLS و CHLAUTH که MCAUSER را به کاربر کم‌دسترسی نگاشت کند؛ `setmqaut` با `+connect +inq` روی qmgr، `+inq +dsp` روی صف‌های مشخص، مجوزهای لازم برای command queue و reply queue؛ برای REST نقش فقط‌خواندنی mqweb (مثلاً `MQWebAdminRO`). **ممنوع:** `RESET QSTATS` (شمارنده‌ها را برای ابزارهای دیگر صفر می‌کند و مجوز تغییر لازم دارد)؛ هر مجوز `+chg`, `+put`/`+get` روی صف‌های کاری | PCF سبک است ولی polling پرتکرار روی صدها صف بار command server دارد → batch با wildcard فقط روی فهرست سفید، 30–60 s؛ BM-06 و EXP-04 | `oldest message age` و `last get/put` معمولاً نیازمند فعال بودن queue monitoring (`MONQ`) است که **تغییر پیکربندی** محسوب می‌شود و تابع `NFR-IMP-002` و تأیید مالک MQ است؛ بدون آن، طبقه‌بندی backlog فقط بر depth و نرخ تکیه می‌کند | `FR-MQ-002`, `FR-MQ-005` |
-| **RabbitMQ** | management HTTP API (`/api/overview`, `/api/queues`, `/api/nodes`) یا Prometheus plugin (`/metrics`، endpoint با جزئیات per-object در نسخه‌های جدیدتر) از طریق `edge-collector` scrape | depth (ready/unacked)، publish/deliver/ack rates، consumers، memory/disk alarms، DLQ depth | کاربر با tag `monitoring` و دسترسی vhost محدود | `/api/queues` با تعداد صف زیاد سنگین است → پارامتر `columns`، صفحه‌بندی، یا ترجیح Prometheus endpoint | فعال‌سازی plugin در صورت نبود = تغییر پیکربندی | `FR-MQ-003` |
-| **F5 BIG-IP** | iControl REST: `/mgmt/tm/ltm/virtual/stats`, `/mgmt/tm/ltm/pool/members/stats`, `/mgmt/tm/sys/...`, گواهی‌ها؛ token از `/mgmt/shared/authn/login` | وضعیت/availability virtual server و pool member، connections، requests، bytes، TLS cert expiry | کاربر محلی یا remote با نقش فقط‌خواندنی (مثلاً Guest/Auditor) روی partitionهای لازم | iControl REST روی management plane با منابع محدود اجرا می‌شود → concurrency=1، بازه ≥ 30–60 s، فقط objectهای فهرست سفید | status code HTTP در سطح virtual اغلب در stats پایه نیست؛ رویدادهای ASM/Advanced WAF از طریق stats در دسترس نیست و نیازمند logging profile به syslog/Splunk است → WAF فقط «جایی که telemetry وجود دارد» (`FR-LB-005`) | `FR-LB-001`, `FR-LB-002`, `FR-LB-004` |
-| **HAProxy** | صفحهٔ stats (خروجی CSV) یا endpoint Prometheus داخلی (نسخه‌های جدیدتر، در صورت فعال بودن در پیکربندی)، scrape از `edge-collector` | frontend/backend/server: sessions، request rate، HTTP 1xx–5xx، queue، server status/check، retries/redispatch | دسترسی فقط‌خواندنی به stats (بدون `stats admin`)؛ محدودیت IP | بسیار سبک | اگر stats/exporter فعال نیست، فعال‌سازی تغییر پیکربندی است؛ Runtime API (socket) محلی است و استفاده نمی‌شود | `FR-LB-001`, `FR-LB-002` |
+| **Splunk** | REST: خواندن نتیجهٔ saved search زمان‌بندی‌شده که پلتفرم تعریف و مدیر Splunk نصب کرده است (روش اصلی، 0.2)؛ `search/jobs` (oneshot/export با `earliest`/`latest`) فقط برای evidence query یا fallback درخواستی | per-minute counts به تفکیک outcome/latency از logs (L0)، رویدادهای توکنیزه (L2) در صورت وجود کلید، evidence query | نقش اختصاصی با دسترسی به indexهای مشخص، quota جست‌وجوی هم‌زمان و دیسک محدود، بدون قابلیت‌های admin | جست‌وجو search slot مصرف می‌کند (R-03، [باز Q-22]) → ترجیح: saved search زمان‌بندی‌شده توسط تیم Splunk (یا summary index) و فقط واکشی نتیجه؛ query templateها با `earliest/latest` محدود، `stats`/`tstats` به‌جای raw events | اثر لایسنس/workload بر حسب مدل لایسنس بانک نامعلوم است؛ نیازمند هماهنگی با admin | `FR-INT-003`, `FR-TXN-003` |
+| **Elasticsearch / OpenSearch** | روش اصلی (0.2): خواندن نتیجهٔ aggregation زمان‌بندی‌شده درون ES (مثلاً transform یا index خلاصه که مدیر ES از تعریف پلتفرم نصب کرده — نیازمند تأیید در نسخه نصب‌شده بانک)؛ fallback: `_search` با `size:0` و aggregations (`date_histogram`، `terms`، percentiles)، composite aggregation برای صفحه‌بندی، `search_after`/PIT برای رویدادها | per-minute counts/outcome/latency از logs، رویدادهای توکنیزه، evidence query | نقش با `read` و `view_index_metadata` روی index patternهای مشخص؛ در صورت لزوم `monitor` کلاستر برای تشخیص نسخه | aggregation با cardinality بالا و بازهٔ بزرگ پرهزینه است → سقف بازه، سقف buckets، `timeout` سمت سرور، استفاده از فیلد keyword | در برخی نسخه‌ها/لایسنس‌های قدیمی امنیت (احراز هویت/نقش) ممکن است فعال نباشد — ریسک امنیتی است و باید در EXP-02 بررسی شود؛ mapping فیلدها متفاوت است | `FR-INT-002`, `FR-TXN-003` |
+| **IBM MQ** | **روش ترجیحی (0.2):** scrape exporter رسمی IBM `mq_prometheus` (مخزن `ibm-messaging/mq-metric-samples`، Apache-2.0) توسط `connector-runtime`؛ یا itemهای موجود Zabbix (قالب رسمی Zabbix برای MQ وجود ندارد). **فقط در صورت شکاف:** PCF مستقیم از طریق client channel (مثلاً `INQUIRE_Q`, `INQUIRE_Q_STATUS`, `INQUIRE_CHANNEL_STATUS`) یا mqweb administrative REST API؛ گزینهٔ دیگر: اشتراک در topicهای آماری `$SYS/MQ/INFO/QMGR/...` (MQ 9+) | current depth، max depth، open input/output count، oldest message age، last get/put time، uncommitted msgs، channel status، نرخ enq/deq | **حداقل:** کاربر اختصاصی، SVRCONN channel اختصاصی با TLS و CHLAUTH که MCAUSER را به کاربر کم‌دسترسی نگاشت کند؛ `setmqaut` با `+connect +inq` روی qmgr، `+inq +dsp` روی صف‌های مشخص، مجوزهای لازم برای command queue و reply queue؛ برای REST نقش فقط‌خواندنی mqweb (مثلاً `MQWebAdminRO`). **ممنوع:** `RESET QSTATS` (شمارنده‌ها را برای ابزارهای دیگر صفر می‌کند و مجوز تغییر لازم دارد)؛ هر مجوز `+chg`, `+put`/`+get` روی صف‌های کاری | PCF سبک است ولی polling پرتکرار روی صدها صف بار command server دارد → batch با wildcard فقط روی فهرست سفید، 30–60 s؛ BM-06 و EXP-04 | `oldest message age` و `last get/put` معمولاً نیازمند فعال بودن queue monitoring (`MONQ`) است که **تغییر پیکربندی** محسوب می‌شود و تابع `NFR-IMP-002` و تأیید مالک MQ است؛ بدون آن، طبقه‌بندی backlog فقط بر depth و نرخ تکیه می‌کند | `FR-MQ-002`, `FR-MQ-005` |
+| **RabbitMQ** | ترجیح (0.2): قالب‌های رسمی Zabbix («RabbitMQ cluster/node») اگر نصب‌اند؛ در غیر این صورت management HTTP API (`/api/overview`, `/api/queues`, `/api/nodes`) یا Prometheus plugin (`/metrics`، endpoint با جزئیات per-object در نسخه‌های جدیدتر) از طریق `edge-collector` scrape | depth (ready/unacked)، publish/deliver/ack rates، consumers، memory/disk alarms، DLQ depth | کاربر با tag `monitoring` و دسترسی vhost محدود | `/api/queues` با تعداد صف زیاد سنگین است → پارامتر `columns`، صفحه‌بندی، یا ترجیح Prometheus endpoint | فعال‌سازی plugin در صورت نبود = تغییر پیکربندی | `FR-MQ-003` |
+| **F5 BIG-IP** | ترجیح (0.2): قالب رسمی Zabbix «F5 Big-IP by SNMP» اگر نصب است؛ در غیر این صورت iControl REST: `/mgmt/tm/ltm/virtual/stats`, `/mgmt/tm/ltm/pool/members/stats`, `/mgmt/tm/sys/...`, گواهی‌ها؛ token از `/mgmt/shared/authn/login` | وضعیت/availability virtual server و pool member، connections، requests، bytes، TLS cert expiry | کاربر محلی یا remote با نقش فقط‌خواندنی (مثلاً Guest/Auditor) روی partitionهای لازم | iControl REST روی management plane با منابع محدود اجرا می‌شود → concurrency=1، بازه ≥ 30–60 s، فقط objectهای فهرست سفید | status code HTTP در سطح virtual اغلب در stats پایه نیست؛ رویدادهای ASM/Advanced WAF از طریق stats در دسترس نیست و نیازمند logging profile به syslog/Splunk است → WAF فقط «جایی که telemetry وجود دارد» (`FR-LB-005`) | `FR-LB-001`, `FR-LB-002`, `FR-LB-004` |
+| **HAProxy** | ترجیح (0.2): قالب رسمی Zabbix «HAProxy by HTTP/agent» اگر نصب است؛ در غیر این صورت صفحهٔ stats (خروجی CSV) یا endpoint Prometheus داخلی (نسخه‌های جدیدتر، در صورت فعال بودن در پیکربندی)، scrape از `edge-collector` | frontend/backend/server: sessions، request rate، HTTP 1xx–5xx، queue، server status/check، retries/redispatch | دسترسی فقط‌خواندنی به stats (بدون `stats admin`)؛ محدودیت IP | بسیار سبک | اگر stats/exporter فعال نیست، فعال‌سازی تغییر پیکربندی است؛ Runtime API (socket) محلی است و استفاده نمی‌شود | `FR-LB-001`, `FR-LB-002` |
 | **NGINX** | OSS: `stub_status`؛ NGINX Plus: API `/api/<version>/` (upstreams، server zones) | OSS: active connections، accepts/handled، requests، reading/writing/waiting — **بدون** تفکیک status code؛ Plus: per-upstream status و responses | دسترسی HTTP محدود به IP collector؛ API Plus در حالت read-only | سبک | تفکیک status code و latency در OSS فقط از access log (از طریق Splunk/ES) | `FR-LB-002` |
 | **Kubernetes** | API server (list/watch) و/یا kube-state-metrics و metrics-server با scrape از `edge-collector` | وضعیت pod/deployment، restartها، رویدادها، مصرف منابع | ServiceAccount با ClusterRole فقط `get/list/watch` روی منابع لازم (بدون secrets) | watch به‌جای poll مکرر؛ محدودیت namespace | وجود K8s در بانک نامعلوم | `FR-RUN-005` |
 | **SQL Server** | DMVها فقط‌خواندنی: مثلاً `sys.dm_os_wait_stats`, `sys.dm_exec_requests`, `sys.dm_os_performance_counters`, `sys.dm_io_virtual_file_stats`, وضعیت Availability Group | waits، blocking، batch requests/s، I/O latency، وضعیت replica | login اختصاصی با `VIEW SERVER STATE` (یا معادل دقیق‌تر در نسخه‌های جدید)؛ **بدون** دسترسی به جداول داده (`db_datareader` داده نمی‌شود) | queryهای DMV با plan cache بزرگ سنگین‌اند → عدم استفاده از query text، بازهٔ ≥ 60 s، `LOCK_TIMEOUT` و `READ UNCOMMITTED` روی DMV | متن query ممکن است دادهٔ حساس داشته باشد → جمع‌آوری نمی‌شود | `FR-RUN-003` |
@@ -248,10 +260,26 @@ Connector داده را به canonical model تبدیل می‌کند: `Metric`�
 
 ### ۵.۱ نکات خاص Splunk و Elasticsearch برای دادهٔ تراکنش
 
-- [توصیه] الگوی ترجیحی: تعریف **query template** نسخه‌دار به ازای `TransactionType` (مثلاً count به تفکیک کد پاسخ و percentileهای latency در بازهٔ یک‌دقیقه‌ای) که تیم Splunk/ES بازبینی و تأیید می‌کند. Connector فقط پارامترهای مجاز (بازهٔ زمانی، index از فهرست سفید) را جایگزین می‌کند؛ ساخت query آزاد از ورودی کاربر ممنوع است (رجوع به سناریوی query injection در [security-and-threat-model.md](security-and-threat-model.md)).
+- [توصیه، 0.2] **محاسبه در محل (in-place):** ماژول `transactions` از `TransactionType` و `OutcomeMapping` یک **تعریف نسخه‌دار** تولید می‌کند (SPL برای saved search زمان‌بندی‌شدهٔ دقیقه‌ای در Splunk؛ aggregation/transform برای ES) که count به تفکیک outcome (فنی در برابر کسب‌وکار) و صدک‌های latency را در بازهٔ یک‌دقیقه‌ای حساب می‌کند. نتیجه در منبع (مثلاً summary index در Splunk یا index خلاصه در ES) نوشته می‌شود و connector فقط آن را می‌خواند (`bank.derivation.mode = SOURCE_SAVED_SEARCH`).
+- **تعارض با حساب فقط‌خواندنی و راه‌حل:** ایجاد saved search یا transform نیازمند دسترسی نوشتن در Splunk/ES است و حساب پلتفرم این دسترسی را ندارد ([ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)). بنابراین پلتفرم تعریف را به‌صورت بستهٔ قابل بازبینی (متن، نسخه، checksum، برآورد بار) تحویل می‌دهد و **مدیر Splunk/ES** آن را نصب، زمان‌بندی و مالکیت می‌کند ([باز Q-28]). connector نسخهٔ نصب‌شده را با نسخهٔ مورد انتظار مقایسه می‌کند و ناهمخوانی را به‌صورت `DEGRADED` گزارش می‌دهد. اگر مدیران نپذیرند، fallback: اجرای همان aggregation به‌صورت **query template** درخواستی در سقف budget (`ON_DEMAND_QUERY`).
+- **بودجهٔ کوئری سمت منبع** هزینهٔ اصلی این مسیر است: تعداد saved search ≈ تعداد TransactionTypeهای فعال × منابع لاگ، هر کدام یک‌بار در دقیقه (برآورد در [capacity-planning.md](capacity-planning.md)؛ BM-04، Q-22).
+- [توصیه] برای fallback و evidence query: **query template** نسخه‌دار به ازای `TransactionType` که تیم Splunk/ES بازبینی و تأیید می‌کند. Connector فقط پارامترهای مجاز (بازهٔ زمانی، index از فهرست سفید) را جایگزین می‌کند؛ ساخت query آزاد از ورودی کاربر ممنوع است (رجوع به سناریوی query injection در [security-and-threat-model.md](security-and-threat-model.md)).
 - **Settling delay:** چون indexing در Splunk/ES تأخیر دارد، بازهٔ دقیقهٔ `t` پس از `t + settle` (پیش‌فرض موقت 2 دقیقه) خوانده و پس از `t + 10 min` یک‌بار دیگر بازخوانی (re-read) می‌شود تا دادهٔ دیررس جذب شود. نسخهٔ جدید جایگزین نسخهٔ قبلی می‌شود (بخش ۸).
 - نگاشت کد پاسخ به `TxnOutcome` در `OutcomeMapping` به صورت داده است، نه در Connector (`FR-TXN-002`).
-- [باز Q-07] وجود کد پاسخ، latency و کلیدهای همبستگی در logها نامعلوم است (R-01، EXP-01).
+- [باز Q-07] وجود کد پاسخ، latency و کلیدهای همبستگی در logها نامعلوم است (R-01، EXP-01، PoC-2).
+
+### ۵.۲ سرویس/SLA در Zabbix و همگام‌سازی تقویم (FR-INT-008، FR-CAL-008)
+
+[توصیه، مشروط به PoC-1 و [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)]
+
+| قابلیت | API (نیازمند تأیید در نسخه نصب‌شده بانک) | جهت | پیش‌فرض | کنترل‌ها |
+|---|---|---|---|---|
+| خواندن وضعیت سرویس | `service.get` (وضعیت، problemهای root cause، tagها) | Zabbix → پلتفرم | **فعال** (اگر Zabbix ≥ 6.0 و سرویس‌ها تعریف شده‌اند — Q-26) | حساب فقط‌خواندنی؛ هر 60 s؛ فقط سرویس‌های نگاشت‌شده با ExternalRef |
+| خواندن SLI | `sla.getsli` به ازای SLA و دوره | Zabbix → پلتفرم | **فعال** (همان شرط) | هر 5–15 min؛ ورودی شاهد در `correlation` و مقایسه با SLO پلتفرم |
+| خواندن پنجره‌های maintenance | `maintenance.get` | Zabbix → پلتفرم | **فعال** | ناسازگاری با تقویم پلتفرم → هشدار پیکربندی، نه تغییر خودکار |
+| نوشتن پنجره‌های تقویم به maintenance/SLA schedule | `maintenance.create/update` (و در صورت تصمیم، excluded downtime در `sla.update`) | پلتفرم → Zabbix | **خاموش** | فقط با تأیید صریح و مکتوب بانک؛ connector جدا (`zabbix-calendar-sync`) با حساب جدا و حداقل دسترسی نوشتن روی host groupهای مشخص؛ فقط اشیای دارای tag مالکیت پلتفرم (مثلاً `bsoip.managed=true`) تغییر می‌کنند؛ dry-run و diff پیش از اعمال؛ audit هر نوشتن؛ قطع خودکار در صورت خطا |
+
+**تعارض صریح:** FR-CAL-008 هدفش جلوگیری از منطق سرکوب تکراری است (یک تقویم، اعمال در هر دو سامانه)، در حالی که [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md) و `NFR-IMP-002`/`NFR-SEC-003` اصل فقط‌خواندنی را می‌خواهند. تصمیم این سند: **پیش‌فرض فقط‌خواندنی**؛ پلتفرم سرکوب را در لایهٔ خود اعمال می‌کند و ناسازگاری پنجره‌ها را گزارش می‌دهد. نوشتن فقط یک قابلیت اختیاری، ممتاز (privileged) و audit‌شده است که بانک می‌تواند فعال کند ([security-and-threat-model.md](security-and-threat-model.md)). PoC-1 فقط روی Zabbix غیرتولیدی هر نوع نوشتن را آزمایش می‌کند.
 
 ## ۶. خط لولهٔ نرمال‌سازی در `ingestion`
 
@@ -263,7 +291,7 @@ flowchart LR
   D --> E[Timestamp normalize<br/>UTC ms, skew, late flag]
   E --> F[Entity resolution<br/>ExternalRef -> catalog ids]
   F --> G[Dedup / idempotency key]
-  G --> H[Batch writer<br/>ClickHouse / PostgreSQL outbox]
+  G --> H[Batch writer<br/>PostgreSQL + outbox<br/>ClickHouse only if triggered]
   H --> I[Ack to sender]
   C -.invalid.-> Q[(Quarantine<br/>counts + reason, no payload)]
   D -.prohibited data.-> Q
@@ -328,12 +356,12 @@ sequenceDiagram
   participant EC as edge-collector (disk queue)
   participant CR as connector-runtime (checkpoint)
   participant ING as platform-core ingest
-  participant CH as ClickHouse
+  participant CH as Telemetry tables (PostgreSQL, ClickHouse on trigger)
   EC->>ING: OTLP batch
   ING->>CH: insert (batched)
   CH-->>ING: ok
   ING-->>EC: success
-  Note over ING,CH: ClickHouse slow / ingest overloaded
+  Note over ING,CH: store slow / ingest overloaded
   EC->>ING: OTLP batch
   ING-->>EC: RESOURCE_EXHAUSTED / 429 + retry hint
   EC->>EC: keep in persistent queue, backoff
@@ -342,18 +370,20 @@ sequenceDiagram
   CR->>CR: pause polling of low-priority tasks, hold checkpoint
 ```
 
-*توضیح:* backpressure از ClickHouse به ingest و از ingest به لبه منتقل می‌شود؛ لبه یا روی دیسک نگه می‌دارد (push) یا با checkpoint بعداً از منبع می‌خواند (pull).
+*توضیح:* `edge-collector` در این نمودار فقط در صورت استقرار حاضر است. backpressure از Store تله‌متری به ingest و از ingest به لبه منتقل می‌شود؛ لبه یا روی دیسک نگه می‌دارد (push) یا با checkpoint بعداً از منبع می‌خواند (pull).
 
-### ۱۱.۱ صف دیسکی `edge-collector`
+### ۱۱.۱ صف دیسکی `edge-collector` (فقط در صورت استقرار)
+
+[توصیه، 0.2] در سناریوی Reuse، حجم هر zone چند ده تا چند صد رکورد/ثانیه است و بافر دیسکی محلی `connector-runtime` (و checkpoint منبع) کافی است؛ اندازه‌گذاری زیر فقط برای سناریوی own-ingestion یا zoneهای دارای `edge-collector` معتبر است.
 
 - `sending_queue` پایدار روی `file_storage`؛ پس از restart حفظ می‌شود.
-- **اندازه‌گذاری** (`NFR-REL-003`: ≥ 4 h در حجم Medium به ازای zone). [فرض] اگر سهم یک zone پرحجم ≈ 25٪ از 33k sample/s سناریوی Medium (≈ 8.3k sample/s) و فضای دیسکی هر sample در صف OTLP ≈ 50–150 byte (شامل سربار attributes؛ [فرضیه] با BM-07 اندازه‌گیری می‌شود) باشد:
-  `8,300 × 14,400 s ≈ 120 M samples → 6–18 GB` برای 4 h. [توصیه] تخصیص اولیهٔ ≥ 40 GB دیسک مستقل برای صف در هر نود collector (حاشیهٔ ≈ 2× برای peak سه تا چهار برابری در کوتاه‌مدت و رشد).
+- **اندازه‌گذاری** (`NFR-REL-003`: ≥ 4 h در حجم Medium به ازای zone). [فرض] طبق [capacity-planning.md](capacity-planning.md) §۶ (مالک عدد): سهم بزرگ‌ترین zone ≈ 40٪ از 33k sample/s سناریوی Medium (CAP-11، ≈ 13.2k sample/s) و فضای دیسکی هر sample در صف OTLP ≈ 50–150 byte (CAP-10؛ [فرضیه] با BM-07 اندازه‌گیری می‌شود):
+  `13,200 × 14,400 s ≈ 190 M samples → 9.5–28.5 GB` برای 4 h؛ با رویدادها ≈ 10.5–31 GB. [توصیه] تخصیص 50–100 GB دیسک مستقل برای صف در هر نود collector در Medium (حاشیه برای peak کوتاه‌مدت و رشد؛ capacity-planning §۶).
 - وقتی صف به 80٪ برسد: هشدار؛ در 100٪: drop با اولویت (ابتدا متریک‌های با اولویت پایین، هرگز رویدادهای source-health) و شمارش `dropped` که در UI به صورت شکاف نمایش داده می‌شود (`NFR-REL-002`).
 
 ### ۱۱.۲ Batching در ingest
 
-- ingest رکوردها را به ازای جدول مقصد در حافظه جمع می‌کند و با آستانهٔ اندازه یا زمان (مقادیر موقت: 50k ردیف یا 1 s، هر کدام زودتر) در ClickHouse درج می‌کند، چون ClickHouse درج‌های بزرگ و کم‌تعداد را ترجیح می‌دهد. گزینهٔ async insert سمت ClickHouse در BM-07 مقایسه می‌شود.
+- ingest رکوردها را به ازای جدول مقصد در حافظه جمع می‌کند و با آستانهٔ اندازه یا زمان در Store تله‌متری درج می‌کند: PostgreSQL (پیش‌فرض) با درج چندردیفی یا `COPY` و upsert روی کلید idempotency (مقادیر موقت: 1k–5k ردیف یا 1 s)؛ ClickHouse (پس از Trigger) با دسته‌های بزرگ (50k ردیف یا 1 s) و مقایسهٔ async insert در BM-07.
 - ack به فرستنده پس از موفقیت درج (حافظهٔ ingest پایدار نیست؛ صف واقعی در لبه است).
 - `memory_limiter` و سقف درخواست‌های هم‌زمان؛ در فشار، پاسخ `RESOURCE_EXHAUSTED`/`UNAVAILABLE` (gRPC) یا 429/503 (HTTP) که طبق مشخصات OTLP قابل retry هستند.
 - اولویت: رویدادهای source-health و events > transaction summaries > metrics.
@@ -361,8 +391,8 @@ sequenceDiagram
 
 ### ۱۱.۳ معیارهای ورود Kafka (از ADR-0010)
 
-Kafka (`event-bus`) فقط در صورت فعال شدن یکی از این triggerها معرفی می‌شود:
-- نرخ پایدار بیش از ≈ 50k event/s؛
+Kafka **فعلاً رد شده است** (شواهد Benchmark در [ADR-0010](architecture-decision-records/ADR-0010-buffering-without-kafka-initially.md)) و `event-bus` فقط در صورت فعال شدن یکی از این triggerها معرفی می‌شود:
+- نرخ پایدار بیش از ≈ 50k رکورد/ثانیه ورودی به `ingest` (میانگین متحرک ۱۵ دقیقه‌ای)؛
 - نیاز به چند مصرف‌کنندهٔ مستقل با replay؛
 - fan-in ingestion چند سایتی؛
 - نیاز به تحمل قطعی نقش ingest بیش از ظرفیت بافر collector (≥ 4 h).
@@ -400,7 +430,7 @@ stateDiagram-v2
 2. query budget مکتوب و توافق‌شده با مالک منبع پیش از `ACTIVE` شدن؛ مصرف آن قابل مشاهده برای مالک منبع.
 3. فقط اشیای فهرست سفید (hostgroup، index، queue، virtual server) poll می‌شوند؛ wildcard نامحدود ممنوع.
 4. بدون query تاریخی بزرگ در ساعات اوج؛ backfill با نرخ محدود و ترجیحاً در ساعات کم‌بار.
-5. هیچ تغییر پیکربندی در دستگاه‌ها و سامانه‌های موجود الزامی نیست. هر قابلیتی که پیش‌نیاز تغییر دارد (فعال‌سازی `MONQ` در MQ، Prometheus plugin در RabbitMQ، exporter در HAProxy، JMX remote، logging profile WAF، saved search در Splunk) به صورت **اختیاری** و با تصمیم مالک آن سامانه علامت‌گذاری می‌شود.
+5. هیچ تغییر پیکربندی در دستگاه‌ها و سامانه‌های موجود الزامی نیست. هر قابلیتی که پیش‌نیاز تغییر دارد (فعال‌سازی `MONQ` یا MQI statistics در MQ — Q-27، نصب exporter `mq_prometheus`، Prometheus plugin در RabbitMQ، exporter در HAProxy، JMX remote، logging profile WAF، نصب saved search/transform در Splunk/ES توسط مدیر آن — Q-28، همگام‌سازی تقویم به Zabbix — FR-CAL-008) به صورت **اختیاری** و با تصمیم مالک آن سامانه علامت‌گذاری می‌شود. [توصیه] مسیر پایهٔ VS-1 باید بدون هیچ‌یک از این‌ها حداقل با depth صف و تجمیع درخواستی کار کند.
 6. پرهیز از عملیات با اثر جانبی حتی اگر «خواندنی» به نظر برسند (مثلاً `RESET QSTATS`، browse پیام‌های صف — خواندن محتوای پیام ممنوع است).
 7. circuit breaker و AIMD در برابر کندی منبع؛ پلتفرم نباید در زمان حادثه بار منبعِ در حال تقلا را بیشتر کند. [توصیه] در وضعیت `BACKOFF` منبع، evidence queryهای دستی نیز با پیام «منبع تحت فشار است» محدود می‌شوند.
 8. اندازه‌گیری اثر در BM-04 (Splunk/ES)، BM-05 (Zabbix) و BM-06 (IBM MQ) با حضور admin هر سامانه.
@@ -410,7 +440,10 @@ stateDiagram-v2
 | مورد | FR/NFR | فاز |
 |---|---|---|
 | SDK، runtime، collector، pipeline | `FR-ING-001..011`, `NFR-REL-001..004` | ۲ |
-| Zabbix، ES، Splunk (+ SolarWinds) | `FR-INT-001..004`, `FR-INT-006` | ۲ |
+| Zabbix، ES، Splunk (+ SolarWinds) | `FR-INT-001..004`, `FR-INT-006` | ۲ (یک سکوی لاگ که لاگ VS-1 را دارد؛ دیگری Should) |
+| سرویس/SLA در Zabbix به‌عنوان شاهد | `FR-INT-008` | ۲ (مشروط به PoC-1) |
+| همگام‌سازی تقویم به Zabbix (اختیاری) | `FR-CAL-008` | ۲ |
+| Evidence PoC فقط‌خواندنی | PoC-1..PoC-5 (EP-23) | 0.5 |
 | IBM MQ، RabbitMQ، F5، HAProxy، NGINX | `FR-MQ-002/003/005`, `FR-LB-001/002/004` | ۲ |
 | SNMP/syslog، webhooks، JMX، SQL Server، K8s، WAF | `FR-ING-004`, `FR-INT-005`, `FR-RUN-001/003/005`, `FR-LB-005` | ۴ |
 | federated evidence query | `FR-INT-007`, `NFR-PRV-005` | ۴ |
@@ -421,4 +454,13 @@ stateDiagram-v2
 
 - **«نکته برای بازبینی» (IBM MQ / `NFR-IMP-002`):** شاخص `oldest message age` که در VS-1 و `FR-MQ-002` آمده، در IBM MQ معمولاً به فعال بودن queue monitoring (`MONQ`) وابسته است؛ اگر فعال نباشد، فعال‌سازی آن تغییر پیکربندی است. پیشنهاد: در `FR-MQ-002` این شاخص «مشروط به capability» علامت بخورد و طبقه‌بندی backlog (`FR-MQ-004`) بدون آن نیز (با depth و نرخ‌ها) کار کند. EXP-04 باید این را روشن کند.
 - **«نکته برای بازبینی» (نرخ enq/deq در IBM MQ):** روش متداول دریافت شمارندهٔ enq/deq (`RESET QSTATS`) با اصل فقط‌خواندنی ناسازگار است؛ جایگزین‌ها (topicهای آماری `$SYS`، رویدادهای statistics، یا برآورد از تفاضل depth) باید در EXP-04 ارزیابی شوند.
+- **«نکته برای بازبینی» (0.2):** با exporter `mq_prometheus`، نرخ‌ها و زمان‌های MQPUT/MQGET به فعال‌سازی MQI statistics نیاز دارد (Q-27) و `RESET QSTATS` در exporter نیز opt-in است و نباید فعال شود. «سن قدیمی‌ترین پیام» در exporter موجود است ولی وابستگی آن به `MONQ` باید در PoC-3 تأیید شود.
+- **«نکته برای بازبینی» (0.2):** پذیرش saved search توسط مدیران Splunk/ES (Q-28) مهم‌ترین فرض مسیر KPI است؛ PoC-2 آن را آزمایش می‌کند.
 - **«نکته برای بازبینی» (Document ID):** شناسهٔ سند `ARC-ING-001` توسط نویسنده انتخاب شده است؛ در صورت وجود قاعدهٔ شناسه‌گذاری مشترک در فهرست اسناد، یکسان‌سازی شود.
+
+## ۱۶. تاریخچه تغییر
+
+| Version | Date | تغییر |
+|---|---|---|
+| 0.1 | 2026-10-11 | نسخه اولیه. |
+| 0.2 | 2026-10-12 | تغییر پس از Product Benchmark: KPI تراکنش با saved search درون Splunk/ES (تعریف پلتفرم، نصب مدیر منبع)؛ IBM MQ از exporter `mq_prometheus` یا itemهای Zabbix؛ خواندن سرویس/SLA در Zabbix و همگام‌سازی اختیاری تقویم (§۵.۲)؛ `edge-collector` اختیاری؛ Store پیش‌فرض PostgreSQL؛ Kafka رد. |

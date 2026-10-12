@@ -3,11 +3,12 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `DOC-REQ-001` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (۱۴۰۵/۰۷/۱۹ – `1405/07/19`) |
 | Owner | `Architecture` |
-| Related documents | [product-charter.md](../vision/product-charter.md)، [domain-model.md](../vision/domain-model.md)، [non-functional-requirements.md](non-functional-requirements.md)، ADRها در [architecture-decision-records](../architecture/architecture-decision-records/) |
+| Related documents | [product-charter.md](../vision/product-charter.md)، [domain-model.md](../vision/domain-model.md)، [non-functional-requirements.md](non-functional-requirements.md)، ADRها در [architecture-decision-records](../architecture/architecture-decision-records/)، [open-questions-and-assumptions.md](../architecture/open-questions-and-assumptions.md)، [product-benchmark.md](../benchmark/product-benchmark.md)، [build-buy-reuse-analysis.md](../benchmark/build-buy-reuse-analysis.md) |
+| Change log | `0.1` (2026-10-11) پیش‌نویس اولیه؛ `0.2` (2026-10-12) **تغییر پس از Product Benchmark**: افزودن FR-CAL-008 و FR-INT-008؛ FR-ING-002 → Should/P4؛ وابستگی FR-UI-001 به Q-23؛ اصلاح FR-MQ-002/004 و FR-NTF-001 (بخش ۲۰) |
 
 > **قرارداد برچسب‌گذاری:** **[واقعیت]**، **[فرض A-xx]**، **[فرضیه]**، **[توصیه]**، **[باز Q-xx]** — مطابق [منشور محصول](../vision/product-charter.md). همهٔ نیازمندی‌های این سند در وضعیت پیش‌نویس‌اند و خود از جنس **[توصیه]** هستند تا زمان تأیید M0.
 
@@ -81,12 +82,13 @@
 | FR-CAL-005 | Calendar-aware SLO definitions | Must | P3 | core |
 | FR-CAL-006 | Error budget & burn rate | Should | P3 | — |
 | FR-CAL-007 | Time-of-week/day-type volume baselines | Should | P3→P5 | core |
+| FR-CAL-008 | Sync calendars & maintenance windows to Zabbix | Should | P2 | — |
 | FR-HLT-001 | Service health with explanation (`HealthState`) | Must | P2 | **core** |
 | FR-HLT-002 | Health propagation as impact, not cause | Should | P2 | core |
 | FR-HLT-003 | Data freshness/source health → UNKNOWN | Must | P2 | core |
 | FR-ING-001 | Connector SDK contract | Must | P2 | prereq |
-| FR-ING-002 | OTLP receive | Must | P2 | prereq |
-| FR-ING-003 | Prometheus scrape via edge-collector | Should | P2 | — |
+| FR-ING-002 | OTLP receive | Should | P4 | — |
+| FR-ING-003 | Prometheus scrape (connector-runtime; edge-collector optional) | Should | P2 | — |
 | FR-ING-004 | SNMP & syslog via edge-collector | Could | P4 | — |
 | FR-ING-005 | File-based offline import | Should | P2 | — |
 | FR-ING-006 | Normalization, UTC timestamps, source identity | Must | P2 | prereq |
@@ -102,6 +104,7 @@
 | FR-INT-005 | Inbound webhooks | Should | P4 | — |
 | FR-INT-006 | Deep links back to sources | Must | P2 | core |
 | FR-INT-007 | Federated evidence query with redaction | Should | P4 | — |
+| FR-INT-008 | Import Zabbix service/SLA status as evidence | Should | P2 | — |
 | FR-COR-001 | Common event model | Must | P2 | prereq |
 | FR-COR-002 | Dedup & time-window grouping | Must | P4 | — |
 | FR-COR-003 | Topology-aware incident grouping | Must | P4 (lite P3) | core (lite) |
@@ -117,9 +120,9 @@
 | FR-ANO-006 | Evaluation harness | Must | P5 | — |
 | FR-ANO-007 | Drift & retraining | Should | P5 | — |
 | FR-ANO-008 | Explanation for every anomaly | Must | P5 | — |
-| FR-NTF-001 | Channels: email/SMS gateway/ITSM webhook | Should | P4 | — |
+| FR-NTF-001 | Incident-level notification via existing channels (Zabbix actions/ITSM/email/SMS gateway) | Should | P4 | — |
 | FR-NTF-002 | Suppression in maintenance & expected-inactive | Must | P3 | core |
-| FR-UI-001 | Persian RTL, Jalali dates, English identifiers | Must | P1 | prereq |
+| FR-UI-001 | Persian RTL, Jalali dates, English identifiers (scope depends on Q-23) | Must | P1 | prereq |
 | FR-UI-002 | Service overview/health dashboard | Must | P2 | core |
 | FR-UI-003 | Topology map | Must | P2 | core |
 | FR-UI-004 | Service detail: KPIs/transactions/dependencies/evidence | Must | P3 | **core** |
@@ -129,6 +132,8 @@
 | FR-ADM-004 | Connector secret management | Must | P2 | prereq |
 | FR-ADM-005 | Multi-bank tenancy | Could | P6+ | — |
 | FR-ADM-006 | Platform self-monitoring | Must | P2→P6 | prereq |
+
+**شمارش (نسخه 0.2):** ۱۰۴ نیازمندی — Must: ۶۳، Should: ۳۲، Could: ۹ (نسخه 0.1: ۱۰۲ — Must ۶۴، Should ۲۹، Could ۹؛ تغییر: +FR-CAL-008، +FR-INT-008، FR-ING-002 از Must به Should).
 
 ---
 
@@ -392,13 +397,14 @@
 - **معیار پذیرش:** صف‌های VS-1 با نقش و صاحب ثبت و به TransactionFlow متصل می‌شوند.
 
 #### FR-MQ-002 — IBM MQ read-only metrics
-- **شرح:** عمق فعلی، max depth، نرخ enqueue/dequeue، oldest message age و وضعیت channel از طریق دسترسی فقط‌خواندنی با حداقل امتیاز (PCF/REST — **نیازمند تأیید در نسخه نصب‌شده بانک**) یا از طریق Zabbix.
+- **شرح:** عمق فعلی، max depth، نرخ enqueue/dequeue و وضعیت channel از طریق دسترسی فقط‌خواندنی با حداقل امتیاز؛ **oldest message age فقط در صورتی که بدون تغییر پیکربندی تأییدنشده روی queue manager در دسترس باشد** (مثلاً اگر monitoring صف از قبل فعال است). منبع داده به ترتیب ترجیح: itemهای موجود Zabbix (در صورت وجود)، exporter استاندارد IBM `mq_prometheus` (Apache-2.0) که توسط `connector-runtime` (یا در صورت لزوم `edge-collector` اختیاری) scrape می‌شود، یا PCF/REST read-only — همه **نیازمند تأیید در نسخه نصب‌شده بانک**. نرخ‌ها/زمان‌بندی‌هایی که به فعال‌سازی آمار MQI نیاز دارند فقط با تأیید بانک **[باز Q-27]** (PoC-3).
 - **اولویت/فاز:** Must / P2 · **VS-1:** core
-- **وابستگی‌ها:** FR-MQ-001، FR-ING-001، NFR-SEC-003، NFR-IMP-001، EXP-04، BM-06
+- **وابستگی‌ها:** FR-MQ-001، FR-ING-001، NFR-SEC-003، NFR-IMP-001، NFR-IMP-002، EXP-04، BM-06، PoC-3
 - **معیار پذیرش:**
   - حساب پلتفرم قادر به put/get/browse محتوای پیام نیست (آزمون منفی EXP-04).
   - بازهٔ polling پیش‌فرض در بازهٔ ۱۰ تا ۶۰ ثانیه قابل‌تنظیم است **[فرض A-04]**.
-  - معیار ناموجود (مثلاً oldest message age بدون فعال بودن monitoring صف) به‌عنوان Capability «unavailable» گزارش می‌شود.
+  - معیار ناموجود (مثلاً oldest message age بدون فعال بودن monitoring صف) به‌عنوان Capability «unavailable» گزارش می‌شود و پلتفرم هرگز برای به‌دست آوردن آن پیکربندی queue manager را تغییر نمی‌دهد.
+  - هیچ فرمانی که آمار صف را reset کند (مانند `RESET QSTATS`) اجرا نمی‌شود؛ حساب فاقد مجوز آن است.
 
 #### FR-MQ-003 — RabbitMQ via management API/Prometheus plugin
 - **شرح:** دریافت معیارهای صف/consumer/connection از RabbitMQ management API یا Prometheus plugin (**نیازمند تأیید در نسخه نصب‌شده بانک**).
@@ -407,13 +413,14 @@
 - **معیار پذیرش:** همان معیارهای canonical FR-MQ-002 تا حدی که منبع پشتیبانی کند، با اعلام Capability.
 
 #### FR-MQ-004 — Backlog classification transient vs sustained
-- **شرح:** طبقه‌بندی backlog به گذرا یا پایدار با نرخ رشد، زمان تخلیهٔ تخمینی (drain time) و زمان تا پرشدن (time-to-full).
+- **شرح:** طبقه‌بندی backlog به گذرا یا پایدار با نرخ رشد، زمان تخلیهٔ تخمینی (drain time) و زمان تا پرشدن (time-to-full). **حداقل ورودی لازم فقط depth و نرخ‌های enqueue/dequeue (یا نرخ مشتق از تغییر depth) است**؛ oldest message age در صورت دسترس بودن فقط شاهد تکمیلی است و نبود آن طبقه‌بندی را متوقف نمی‌کند.
 - **اولویت/فاز:** Must / P3 · **VS-1:** core
 - **وابستگی‌ها:** FR-MQ-002، FR-CAL-004
 - **معیار پذیرش:**
   - Given عمق رو به افزایش با dequeue ≈ 0 برای مدت پیکربندی‌شده، Then کلاس «sustained» با time-to-full تخمینی نمایش داده می‌شود.
   - Given افزایش عمق با dequeue فعال و drain time کمتر از آستانه، Then کلاس «transient» و بدون هشدار بحرانی.
   - توضیح طبقه‌بندی شامل مقادیر ورودی و آستانه‌هاست.
+  - Given Capability «oldest message age = unavailable»، Then طبقه‌بندی با depth و نرخ‌ها انجام و در توضیح «سن پیام در دسترس نیست» ذکر می‌شود.
 
 #### FR-MQ-005 — DLQ/failed message indicators
 - **شرح:** پایش عمق و نرخ ورود به صف‌های DLQ/backout.
@@ -559,6 +566,16 @@
 - **وابستگی‌ها:** FR-CAL-001، FR-TXN-003
 - **معیار پذیرش:** baseline با حداقل تاریخچهٔ پیکربندی‌شده ساخته می‌شود؛ در کمبود تاریخچه، UI «baseline ناکافی» نشان می‌دهد.
 
+#### FR-CAL-008 — Sync calendars & maintenance windows to Zabbix
+- **شرح:** صدور (export) تقویم کسب‌وکار، ServiceWindow و MaintenanceWindow پلتفرم به Zabbix (maintenance periods و/یا زمان‌بندی SLA) تا منطق suppression در دو جا تکرار نشود و هشدارهای Zabbix در پنجره‌های مورد انتظار به‌طور هم‌سان سرکوب شوند. پلتفرم منبع حقیقت تقویم است. **[توصیه]** حالت پیش‌فرض «dry-run / فایل خروجی برای اعمال توسط مالک Zabbix» است؛ نوشتن مستقیم در Zabbix API فقط با حساب جداگانهٔ محدود به maintenance/SLA و تأیید صریح مالک Zabbix **[باز Q-26]**، چون این تنها استثنای اصل read-only در [ADR-0020](../architecture/architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md) است.
+- **اولویت/فاز:** Should / P2 · **VS-1:** —
+- **وابستگی‌ها:** FR-CAL-001، FR-CAL-002، FR-CAL-003، FR-INT-001، FR-ADM-003، NFR-IMP-002، [ADR-0023](../architecture/architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)، PoC-1
+- **معیار پذیرش:**
+  - Given یک MaintenanceWindow یا روز تعطیل در پلتفرم، When همگام‌سازی اجرا می‌شود، Then دوره/زمان‌بندی معادل در Zabbix (یا فایل خروجی) با شناسهٔ مرجع پلتفرم ایجاد می‌شود و اجرای مجدد تکرار ایجاد نمی‌کند (idempotent).
+  - تفاوت (drift) بین پلتفرم و Zabbix تشخیص و گزارش می‌شود؛ هیچ ورودی Zabbix که توسط پلتفرم ایجاد نشده تغییر یا حذف نمی‌شود.
+  - هر عمل همگام‌سازی audit می‌شود؛ با غیرفعال بودن این قابلیت، رفتار پلتفرم بدون تغییر است.
+  - آزمون همگام‌سازی در [quality-and-validation-strategy.md](../testing/quality-and-validation-strategy.md) (آزمون‌های Zabbix sync).
+
 ---
 
 ## ۱۰. سلامت (HLT) — Epic EP-10
@@ -594,15 +611,15 @@
 - **معیار پذیرش:** یک connector نمونه بدون تغییر در `platform-core` اضافه و اجرا می‌شود (NFR-MNT-004)؛ آزمون قرارداد (contract test) در CI.
 
 #### FR-ING-002 — OTLP receive
-- **شرح:** دریافت OTLP/gRPC و OTLP/HTTP از `edge-collector` و `connector-runtime` با mTLS.
-- **اولویت/فاز:** Must / P2 · **VS-1:** prereq
+- **شرح:** دریافت OTLP/gRPC و OTLP/HTTP از `edge-collector` و `connector-runtime` با mTLS. پس از Product Benchmark، داده فاز ۲ از طریق batch API داخلی `connector-runtime` وارد می‌شود و `edge-collector` اختیاری است؛ بنابراین OTLP receive تا زمانی که نیاز (ابزارگذاری آینده یا scrape در zone غیرقابل‌دسترس) اثبات شود به P4 منتقل شد.
+- **اولویت/فاز:** Should / P4 · **VS-1:** —
 - **وابستگی‌ها:** NFR-SEC-001
 - **معیار پذیرش:** اتصال بدون گواهی کلاینت معتبر رد می‌شود؛ پاسخ‌های backpressure مطابق مشخصات OTLP.
 
 #### FR-ING-003 — Prometheus scrape via edge-collector
-- **شرح:** scrape اهداف Prometheus در zone و ارسال OTLP.
-- **اولویت/فاز:** Should / P2 · **VS-1:** —
-- **وابستگی‌ها:** FR-ING-002
+- **شرح:** scrape اهداف Prometheus در zone (مثلاً exporter IBM `mq_prometheus`). در P2 scrape توسط `connector-runtime` انجام و از batch API داخلی ارسال می‌شود؛ `edge-collector` + OTLP فقط در zoneهایی که `connector-runtime` به آن‌ها دسترسی ندارد (پس از فعال شدن FR-ING-002).
+- **اولویت/فاز:** Should / P2 · **VS-1:** — (برای MQ exporter: prereq FR-MQ-002 در صورت انتخاب این مسیر در PoC-3)
+- **وابستگی‌ها:** FR-ING-001؛ FR-ING-002 فقط برای مسیر `edge-collector`
 - **معیار پذیرش:** محدودیت cardinality قابل‌پیکربندی؛ سری‌های اضافه drop و شمارش می‌شوند.
 
 #### FR-ING-004 — SNMP & syslog via edge-collector
@@ -700,6 +717,15 @@
 - **اولویت/فاز:** Should / P4 · **VS-1:** —
 - **وابستگی‌ها:** NFR-PRV-005، NFR-IMP-001، FR-ADM-001
 - **معیار پذیرش:** نتایج پیش از رسیدن به UI redaction می‌شوند؛ سقف تعداد نتایج و زمان؛ هر پرس‌وجو audit می‌شود.
+
+#### FR-INT-008 — Import Zabbix service/SLA status as evidence
+- **شرح:** خواندن read-only وضعیت business service tree و SLI/SLA از Zabbix (مثلاً `service.get` و `sla.getsli` — **نیازمند تأیید در نسخه نصب‌شده بانک** **[باز Q-26]**) و ثبت آن به‌عنوان `Evidence`/سیگنال مشتق برای سلامت و همبستگی، به‌جای بازسازی درخت سرویس زیرساختی. دامنهٔ استفاده (فقط شاهد یا منبع اصلی سلامت زیرساختی) با نتیجهٔ PoC-1 و [ADR-0023](../architecture/architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md) تعیین می‌شود.
+- **اولویت/فاز:** Should / P2 · **VS-1:** —
+- **وابستگی‌ها:** FR-INT-001، FR-CAT-009، FR-COR-001، FR-HLT-001، NFR-IMP-001
+- **معیار پذیرش:**
+  - وضعیت سرویس Zabbix با نگاشت ExternalRef به Component/TechnicalService متصل و با برچسب منبع `zabbix-service` و `observed_at` ذخیره می‌شود.
+  - وضعیت Zabbix هرگز به‌طور مستقیم `HealthState` سرویس کسب‌وکاری را تعیین نمی‌کند مگر قاعدهٔ سلامت صریحاً آن را به‌کار گیرد؛ در توضیح سلامت به‌عنوان «شاهد از Zabbix» نمایش داده می‌شود.
+  - عدم دسترسی به API سرویس/SLA (نسخهٔ قدیمی یا مجوز ناکافی) به‌عنوان Capability «unavailable» گزارش می‌شود و بقیهٔ کانکتور Zabbix کار می‌کند.
 
 ---
 
@@ -808,10 +834,10 @@
 ## ۱۵. اعلان (NTF) — Epic EP-17
 
 #### FR-NTF-001 — Channels: email/SMS gateway/ITSM webhook
-- **شرح:** ارسال اعلان به email، درگاه SMS داخلی و ITSM از طریق webhook.
+- **شرح:** پلتفرم منبع هشدار جدیدی در کنار Zabbix/SolarWinds نیست. اعلان **فقط در سطح Incident سرویس** و **از طریق کانال‌های موجود بانک** (Zabbix actions، ITSM، email، درگاه SMS داخلی — هر کدام موجود باشد) مسیریابی می‌شود؛ حداکثر یک اعلان به ازای هر Incident سرویس (با به‌روزرسانی روی همان مورد) تا هشدار تکراری ایجاد نشود.
 - **اولویت/فاز:** Should / P4 · **VS-1:** —
-- **وابستگی‌ها:** FR-COR-003، **[باز Q-14]**
-- **معیار پذیرش:** قواعد مسیریابی بر اساس سرویس/criticality؛ retry با idempotency؛ محتوای اعلان فاقد دادهٔ حساس.
+- **وابستگی‌ها:** FR-COR-003، FR-NTF-002، **[باز Q-14]**
+- **معیار پذیرش:** قواعد مسیریابی بر اساس سرویس/criticality؛ retry با idempotency؛ محتوای اعلان فاقد دادهٔ حساس؛ برای یک Incident با N رویداد منبع، فقط یک اعلان باز و به‌روزرسانی‌های بعدی روی همان شناسه؛ هیچ کانال اعلان مستقل جدیدی بدون تأیید Q-14 ساخته نمی‌شود.
 
 #### FR-NTF-002 — Suppression in maintenance & expected-inactive
 - **شرح:** عدم ارسال اعلان در `MAINTENANCE` و `EXPECTED_INACTIVE` (در P3 برای نمایش/هشدارهای داخلی؛ در P4 برای کانال‌ها).
@@ -826,7 +852,8 @@
 #### FR-UI-001 — Persian RTL, Jalali dates, English identifiers
 - **شرح:** UI فارسی راست‌به‌چپ، تاریخ جلالی، شناسه‌های فنی انگلیسی LTR درون متن.
 - **اولویت/فاز:** Must / P1 · **VS-1:** prereq
-- **وابستگی‌ها:** NFR-USA-001
+- **وابستگی‌ها:** NFR-USA-001، **[باز Q-23]**، [ADR-0024](../architecture/architecture-decision-records/ADR-0024-visualization-split-custom-operator-ui-optional-grafana.md)
+- **یادداشت:** دامنهٔ UI سفارشی به صفحات اپراتور (سلامت سرویس، Incident/شواهد، کاتالوگ، تقویم) محدود است؛ داشبوردهای مهندسی می‌توانند Grafana OSS اختیاری یا deep link به ابزارهای موجود باشند. اگر Q-23 نشان دهد UI انگلیسی برای اپراتورها پذیرفتنی است، اولویت RTL/جلالی در صفحات غیراپراتوری کاهش می‌یابد؛ تا آن زمان Must می‌ماند.
 - **معیار پذیرش:** همهٔ صفحات در RTL بدون شکستگی چیدمان؛ شناسه‌ها و اعداد فنی با جهت صحیح؛ امکان نمایش تاریخ میلادی در کنار جلالی.
 
 #### FR-UI-002 — Service overview/health dashboard
@@ -899,15 +926,17 @@
 | MQ | EP-09 | ADR-0004، ADR-0020 |
 | RUN | EP-08 (RUN-004)، EP-14 | ADR-0004 |
 | DX | EP-15، EP-11 (DX-004) | ADR-0018 |
-| CAL | EP-04، EP-12 | ADR-0007 |
+| CAL | EP-04، EP-12؛ CAL-008 در EP-04 (P2) | ADR-0007، ADR-0023 |
 | HLT | EP-10 | ADR-0012 |
-| ING | EP-06، EP-07 | ADR-0004، ADR-0005، ADR-0006، ADR-0010 |
-| INT | EP-08، EP-13 (INT-007) | ADR-0009، ADR-0020 |
+| ING | EP-06، EP-07 | ADR-0004، ADR-0005، ADR-0006، ADR-0008، ADR-0010 |
+| INT | EP-08 (شامل INT-008)، EP-13 (INT-007) | ADR-0009، ADR-0020، ADR-0021، ADR-0023 |
 | COR | EP-13 | ADR-0005، ADR-0012 |
 | ANO | EP-10 (ANO-001)، EP-16 | ADR-0013 |
-| NTF | EP-17 | ADR-0005 |
-| UI | EP-03، EP-10 | ADR-0014 |
+| NTF | EP-17 | ADR-0005، ADR-0021 |
+| UI | EP-03، EP-10 | ADR-0014، ADR-0024 |
 | ADM | EP-02، EP-07 (ADM-004)، EP-21 (ADM-006) | ADR-0015، ADR-0016، ADR-0018 |
+
+اعتبارسنجی پیش از ساخت: Evidence PoC (EP-23، فاز 0.5) فرضیه‌های FR-TXN-003/005، FR-MQ-002/004، FR-COR-004 (پنل شواهد) و FR-INT-008/FR-CAL-008 را پیش از G-PoC می‌آزماید ([master-plan.md](../roadmap/master-plan.md)).
 
 نیازمندی‌های غیرکارکردی در [non-functional-requirements.md](non-functional-requirements.md) و مستندات ADR در پوشهٔ [architecture-decision-records](../architecture/architecture-decision-records/) قرار دارند. شناسهٔ storyها به شکل `US-<EP#>-NN` به این FRها ارجاع خواهد داد.
 
@@ -915,3 +944,19 @@
 
 - «نکته برای بازبینی»: FR-COR-004 در spine «Must, P4» است و در VS-1 علامت VS ندارد، ولی معیار موفقیت VS-1 (رتبه‌بندی hop معیوب در top-3) عملاً به نسخهٔ ساده‌ای از رتبه‌بندی شواهد در P3 نیاز دارد. این سند آن را «پنل شواهد P3» نامیده است؛ پیشنهاد می‌شود دامنهٔ دقیق «evidence panel» در P3 (صرفاً فهرست مرتب‌شده با confidence، بدون CauseHypothesis کامل) در طرح VS-1 صریح شود.
 - «نکته برای بازبینی»: FR-NTF-002 در P3 است ولی کانال‌های اعلان (FR-NTF-001) در P4؛ معنای P3 در این سند «suppression در وضعیت/هشدارهای داخلی UI» تعبیر شده است.
+
+## ۲۰. تغییرات پس از Product Benchmark (نسخه 0.2)
+
+خلاصهٔ تغییرات بر اساس [product-benchmark.md](../benchmark/product-benchmark.md) و [build-buy-reuse-analysis.md](../benchmark/build-buy-reuse-analysis.md) (گزینهٔ E «Reuse-first thin banking intelligence layer»، [ADR-0021](../architecture/architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md)):
+
+| FR | تغییر | دلیل |
+|---|---|---|
+| FR-CAL-008 | جدید (Should, P2) | جلوگیری از منطق suppression تکراری؛ تقویم پلتفرم منبع حقیقت، Zabbix مصرف‌کننده |
+| FR-INT-008 | جدید (Should, P2) | استفادهٔ مجدد از services/SLA زبیکس به‌جای بازسازی؛ وابسته به PoC-1/ADR-0023 |
+| FR-ING-002 | Must/P2 → Should/P4 | `edge-collector` اختیاری شد؛ ورود داده در P2 از batch API `connector-runtime` |
+| FR-UI-001 | وابستگی به Q-23 | تقسیم UI اپراتوری سفارشی / Grafana اختیاری (ADR-0024) |
+| FR-MQ-002 | oldest message age مشروط | نیاز به تغییر پیکربندی queue manager (NFR-IMP-002، Q-27) |
+| FR-MQ-004 | کار با depth + نرخ‌ها | مستقل از oldest message age |
+| FR-NTF-001 | فقط از کانال‌های موجود، یک اعلان به ازای Incident | پلتفرم منبع هشدار اضافه نیست |
+
+- «نکته برای بازبینی»: FR-CAL-008 در حالت نوشتن مستقیم، تنها مسیر نوشتنی پلتفرم در یک سیستم موجود است و با ADR-0020 (read-only) در تنش است؛ پیش‌فرض این سند «فایل خروجی/dry-run» است و حالت نوشتن مستقیم نیازمند تصمیم صریح در بازبینی و پاسخ Q-26 است.

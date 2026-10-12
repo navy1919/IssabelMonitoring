@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0001 | record-architecture-decisions | **Accepted** | Firm | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [ADR index](README.md)، [technology-evaluation.md](../technology-evaluation.md)، [open-questions-and-assumptions.md](../open-questions-and-assumptions.md)
 
 ## Context (زمینه)

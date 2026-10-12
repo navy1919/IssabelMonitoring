@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0009 | no-own-raw-log-store-federate-existing | Proposed | Firm (فازهای ۱ تا ۵) | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [technology-evaluation.md §۷](../technology-evaluation.md)، [ingestion-and-connectors.md](../ingestion-and-connectors.md)، [ADR-0020](ADR-0020-existing-platform-integration-read-only-pull.md)، [capacity-planning.md §۸](../capacity-planning.md)
 
 ## Context

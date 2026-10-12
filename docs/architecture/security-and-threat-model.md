@@ -3,11 +3,11 @@
 | فیلد | مقدار |
 |---|---|
 | Document ID | `ARC-SEC-001` |
-| Version | `0.1` |
+| Version | `0.2` |
 | Status | `Draft – Phase 0 – awaiting approval` |
 | Date | `2026-10-11` (`1405/07/19`) |
 | Owner | `Architecture` |
-| Related documents | [ingestion-and-connectors.md](ingestion-and-connectors.md)، [correlation-and-intelligence.md](correlation-and-intelligence.md)، [ADR-0015](architecture-decision-records/ADR-0015-authentication-authorization-audit.md)، [ADR-0016](architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)، [ADR-0017](architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، [docs/requirements/](../requirements/)، [docs/operations/](../operations/)، [docs/testing/](../testing/) |
+| Related documents | [ingestion-and-connectors.md](ingestion-and-connectors.md)، [correlation-and-intelligence.md](correlation-and-intelligence.md)، [ADR-0015](architecture-decision-records/ADR-0015-authentication-authorization-audit.md)، [ADR-0016](architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)، [ADR-0017](architecture-decision-records/ADR-0017-ha-dr-architecture.md)، [ADR-0018](architecture-decision-records/ADR-0018-data-retention-privacy-capacity-controls.md)، [ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، [ADR-0022](architecture-decision-records/ADR-0022-commercial-platforms-not-adopted.md)، [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)، [product-benchmark.md](../benchmark/product-benchmark.md)، [docs/requirements/](../requirements/)، [docs/operations/](../operations/)، [docs/testing/](../testing/) |
 
 **راهنمای برچسب‌ها:** [واقعیت] فقط F-01..F-03؛ [فرض A-xx]؛ [فرضیه]؛ [توصیه]؛ [باز Q-xx].
 
@@ -21,7 +21,7 @@
 |---|---|---|---|
 | AS-01 | credentialهای فقط‌خواندنی منابع (Zabbix، SolarWinds، Splunk، ES، MQ، F5، DB، ...) | دسترسی گسترده به اطلاعات عملیاتی بانک؛ هدف پرارزش (R-06) | secret store؛ حافظهٔ `connector-runtime` |
 | AS-02 | کلیدهای HMAC توکنیزه‌سازی به ازای محیط | با نشت کلید، توکن PAN با brute-force فضای محدود PAN قابل بازگشت است | secret store/HSM ([باز Q-09]) |
-| AS-03 | دادهٔ تلمتری مشتق (متریک، رویداد، خلاصهٔ تراکنش، رویداد توکنیزه) | اطلاعات حجم و الگوی تراکنش بانک | `telemetry-store` (ClickHouse) |
+| AS-03 | دادهٔ تلمتری مشتق (متریک، رویداد، خلاصهٔ تراکنش، رویداد توکنیزه) | اطلاعات حجم و الگوی تراکنش بانک | `telemetry-store` (schema `telemetry` در PostgreSQL؛ ClickHouse فقط در صورت trigger [ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md)) |
 | AS-04 | metadata: catalog، topology، ExternalRef، پیکربندی Connector | نقشهٔ کامل معماری و وابستگی‌ها — برای مهاجم بسیار مفید است | `metadata-db` (PostgreSQL) |
 | AS-05 | نتایج federated evidence query | ممکن است گزیده‌ای از log حاوی دادهٔ شخصی باشد | گذرا در `evidence-query` و UI |
 | AS-06 | audit log | شواهد پاسخ‌گویی؛ هدف دستکاری | PostgreSQL (append-only) + ارسال به SIEM/Splunk |
@@ -99,6 +99,8 @@ S=Spoofing، T=Tampering، R=Repudiation، I=Information disclosure، D=Denial o
 | T-14 | audit log | T/R | حذف یا ویرایش رکورد audit | جدول append-only (بدون UPDATE/DELETE برای نقش برنامه)، زنجیرهٔ hash، ارسال فوری به SIEM | `NFR-SEC-006` |
 | T-15 | `api` ↔ `connector-runtime` command channel | S/E | ارسال فرمان جعلی به runtime | runtime فقط فرمان‌های امضاشده/احرازشده از `api` روی mTLS را می‌پذیرد؛ نوع فرمان محدود (evidence query template، probe) | `NFR-SEC-001` |
 | T-16 | زنجیرهٔ build آفلاین | T | وابستگی مخرب، image دستکاری‌شده | mirror کنترل‌شده، pin نسخه و checksum، SBOM CycloneDX، امضای artifact، اسکن آسیب‌پذیری | `NFR-SEC-007` |
+| T-17 (0.2) | حساب نوشتن همگام‌سازی تقویم در Zabbix | T، E | ایجاد maintenance جعلی برای سرکوب هشدار واقعی | پیش‌فرض خاموش، حساب جدا با حداقل گستره، tag مالکیت، dry-run/diff، four-eyes، audit (§۷.۳) | `NFR-SEC-003`, `NFR-SEC-006` |
+| T-18 (0.2) | exporter `mq_prometheus` در zone میان‌افزار | I، T | افشای متریک صف از endpoint بدون احراز هویت؛ جایگزینی باینری | endpoint فقط روی interface داخلی با allowlist IP `connector-runtime` و TLS در صورت امکان؛ حساب MQ حداقلی (`+inq +dsp`)؛ باینری امضاشده در bundle آفلاین؛ `RESET QSTATS` خاموش | `NFR-SEC-003`, `NFR-SEC-007` |
 | T-17 | نقش `analytics`/UI | I | استنتاج دادهٔ حساس از ترکیب داده‌های توکنیزه (مثلاً توکن PAN + زمان + bucket مبلغ) | دسترسی به رویدادهای توکنیزه فقط با مجوز ویژه، retention کوتاه (30 d)، عدم نمایش توکن در UI عمومی | `NFR-PRV-003`, `NFR-PRV-004` |
 | T-18 | synthetic checks | T/D | تراکنش مالی ناخواسته یا بار روی سرویس | guardrailهای §۱۱ | `FR-DX-003` |
 | T-19 | `identity-provider` | S/E | ارتقای نقش با دستکاری گروه AD | نگاشت گروه به نقش در `iam` با audit، بازبینی دوره‌ای، تأیید دوگانه برای نقش‌های admin | `NFR-SEC-005` |
@@ -188,7 +190,7 @@ S=Spoofing، T=Tampering، R=Repudiation، I=Information disclosure، D=Denial o
 
 ### ۶.۲ Detectorها
 
-[توصیه] پیش از هر تشخیص، **نرمال‌سازی ارقام** انجام می‌شود: ارقام فارسی (`۰-۹`) و عربی-هندی (`٠-٩`) به ASCII، و حذف جداکننده‌های رایج (فاصله، `-`) برای تطبیق الگو.
+[توصیه] پیش از هر تشخیص، **نرمال‌سازی ارقام** انجام می‌شود: ارقام فارسی (`۰-۹`، U+06F0..U+06F9) و عربی-هندی (`٠-٩`، U+0660..U+0669) به ASCII، و حذف جداکننده‌های رایج (فاصله، فاصلهٔ مجازی/ZWNJ، `-`) برای تطبیق الگو. این قاعده **مالک واحد** نرمال‌سازی ارقام در کل پلتفرم است: در لبه (`connector-runtime`، و `edge-collector` در صورت استقرار)، در ingest، روی نتایج federated query و نتایج saved search کشیده‌شده از Splunk/ES، و پیش از نگاشت `OutcomeMapping` ([correlation-and-intelligence.md](correlation-and-intelligence.md)) اعمال می‌شود. نسخهٔ نرمال‌شده فقط برای تشخیص است؛ مقدار ذخیره‌شده پس از redaction است.
 
 | Detector | الگو و اعتبارسنجی | ملاحظات |
 |---|---|---|
@@ -215,7 +217,7 @@ S=Spoofing، T=Tampering، R=Repudiation، I=Information disclosure، D=Denial o
 
 ### ۶.۴ Retention
 
-مقادیر موقت ADR-0018 / spine §6 ([باز Q-16], [باز Q-10]): raw metric 30 d، rollup یک‌دقیقه‌ای 13 ماه، rollup یک‌ساعته 3 سال، رویدادهای نرمال 13 ماه، خلاصهٔ تراکنش 13 ماه، رویداد توکنیزه 30 d، audit ≥ 5 سال. اعمال با TTL در ClickHouse و jobهای پاک‌سازی در PostgreSQL، با گزارش ممیزی retention (`NFR-PRV-004`).
+مقادیر موقت ADR-0018 / spine §6 ([باز Q-16], [باز Q-10]): raw metric 30 d، rollup یک‌دقیقه‌ای 13 ماه، rollup یک‌ساعته 3 سال، رویدادهای نرمال 13 ماه، خلاصهٔ تراکنش 13 ماه، رویداد توکنیزه 30 d، audit ≥ 5 سال. اعمال با حذف partition در PostgreSQL (schema `telemetry`، پیش‌فرض از 0.2) و TTL در ClickHouse در صورت Trigger ([ADR-0008](architecture-decision-records/ADR-0008-telemetry-store-postgresql-first-clickhouse-on-trigger.md))، با گزارش ممیزی retention (`NFR-PRV-004`).
 
 ## ۷. مدل کنترل دسترسی (`FR-ADM-001`, `FR-ADM-002`, ADR-0015)
 
@@ -237,11 +239,23 @@ S=Spoofing، T=Tampering، R=Repudiation، I=Information disclosure، D=Denial o
   - `evidence:query` — اجرای federated query (حتی با redaction)؛
   - `txn-events:read` — دسترسی به رویدادهای توکنیزهٔ L2؛
   - `synthetic:manage` — تعریف و فعال‌سازی synthetic check (§۱۱)؛
-  - `audit:export`.
+  - `audit:export`؛
+  - `zabbix-calendar-sync:enable` (0.2) — فعال‌سازی و تغییر قابلیت اختیاری نوشتن پنجره‌های تقویم در Zabbix (§۷.۳).
 - **تفکیک وظایف:** هیچ کاربری نمی‌تواند نقش خود را ارتقا دهد؛ تغییرات نقش‌های `platform-admin`/`integration-admin` و تغییر endpoint/secretRef Connector نیازمند تأیید فرد دوم (four-eyes).
 - **حساب break-glass:** محلی، با رمز در گاوصندوق، استفاده موجب هشدار فوری و audit.
 - **حساب‌های سرویس:** هویت mTLS برای `connector-runtime`/`edge-collector`؛ حساب‌های DB per role (`api`, `ingest`, `analytics`) با حداقل مجوز.
 - **هویت:** OIDC از IdP بانک، یا Keycloak با federation به AD/LDAP ([باز Q-04]، [فرض A-07]).
+
+### ۷.۳ نوشتن در Zabbix (همگام‌سازی تقویم) — قابلیت ممتاز، اختیاری و audit‌شده (0.2)
+
+[توصیه] همگام‌سازی تقویم به maintenance/SLA schedule در Zabbix (FR-CAL-008، [ADR-0023](architecture-decision-records/ADR-0023-reuse-zabbix-services-and-sla.md)) تنها مسیر نوشتن پلتفرم در یک سامانهٔ منبع است و برخلاف اصل فقط‌خواندنی ([ADR-0020](architecture-decision-records/ADR-0020-existing-platform-integration-read-only-pull.md)، `NFR-SEC-003`) است؛ بنابراین:
+- **پیش‌فرض خاموش**؛ فعال‌سازی فقط با تأیید مکتوب مالک Zabbix و واحد امنیت بانک، و مجوز `zabbix-calendar-sync:enable` با four-eyes.
+- **حساب جداگانه** (نه همان حساب فقط‌خواندنی) با حداقل دسترسی نوشتن روی maintenance/host groupهای مشخص؛ secret جدا در SecretProvider؛ فقط در connector جداگانهٔ `zabbix-calendar-sync`.
+- فقط اشیای دارای tag مالکیت پلتفرم تغییر می‌کنند؛ حذف/تغییر maintenance ساخته‌شده توسط انسان ممنوع.
+- dry-run و نمایش diff پیش از هر اعمال؛ سقف تعداد تغییر در هر اجرا؛ قطع خودکار (circuit breaker) در خطا.
+- audit کامل هر نوشتن (before/after، شیء Zabbix، کاربر/تأییدکننده) و ارسال به SIEM.
+- تهدید: سوءاستفاده از این حساب می‌تواند با ایجاد maintenance جعلی هشدارهای واقعی Zabbix را سرکوب کند (T-17 زیر) — به همین دلیل گسترهٔ host group آن باید حداقلی باشد.
+- PoC-1 هر نوشتن را فقط روی Zabbix غیرتولیدی آزمایش می‌کند (صفر نوشتن در تولید).
 
 ## ۸. مدیریت secret (`FR-ADM-004`, `NFR-SEC-004`)
 
@@ -283,11 +297,11 @@ S=Spoofing، T=Tampering، R=Repudiation، I=Information disclosure، D=Denial o
 
 ## ۱۲. Hardening (`NFR-SEC-008`)
 
-- baseline شبیه CIS برای OS (RHEL-compatible، [فرض A-02]، [باز Q-03])، PostgreSQL، ClickHouse و runtime container.
+- baseline شبیه CIS برای OS (RHEL-compatible، [فرض A-02]، [باز Q-03])، PostgreSQL، ClickHouse (در صورت استقرار) و runtime container.
 - containerها بدون root، file system فقط‌خواندنی در حد امکان، حذف ابزارهای غیرضروری از image، محدودیت منابع.
 - Spring Boot: غیرفعال‌سازی actuator endpointهای حساس یا محدود به شبکهٔ مدیریتی و احراز هویت؛ بدون stack trace در پاسخ API.
 - HTTP security headers: CSP، `X-Content-Type-Options`، `Frame-Options`/`frame-ancestors`، HSTS.
-- ClickHouse: کاربران per role، غیرفعال‌سازی کاربر `default` بدون رمز، محدودیت‌های query (حداکثر حافظه/زمان) برای نقش‌های خواننده.
+- ClickHouse (فقط در صورت trigger ADR-0008): کاربران per role، غیرفعال‌سازی کاربر `default` بدون رمز، محدودیت‌های query (حداکثر حافظه/زمان) برای نقش‌های خواننده.
 - به‌روزرسانی امنیتی از طریق bundle آفلاین ([ADR-0016](architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md)).
 - ارزیابی امنیتی و pentest در فاز ۶ (EP-20)؛ امنیت در همهٔ فازها پیوسته است.
 
@@ -300,6 +314,8 @@ S=Spoofing، T=Tampering، R=Repudiation، I=Information disclosure، D=Denial o
 | ISO/IEC 27001 (در صورت گواهی بانک) | نامعلوم | نگاشت کنترل‌ها پس از Q-10 |
 | اقامت داده | on-prem (F-02)؛ جزئیات دیگر نامعلوم | Q-10 |
 | مدت نگهداری audit و داده | موقت (§۶.۴) | Q-10, Q-16 |
+| تحریم و تداوم مجوز (0.2) | **ریسک R-16:** ابزارهای تجاری موجود بانک (Splunk، SolarWinds؛ و IBM MQ و اشتراک Elasticsearch در صورت وجود) از فروشندگان آمریکایی‌اند؛ مقررات ITSR/EAR تأمین **و به‌روزرسانی/وصله** را بدون مجوز ممنوع می‌کنند و ارائه از طریق واسطه خود تخلف است (پرونده SAP 2021). نحوهٔ مجوز و به‌روزرسانی فعلی نامعلوم است ([باز Q-25])؛ گزارش‌های انجمن Splunk حاکی از توقف جستجو پس از انقضای مجوز است (Low-Medium). پیامد امنیتی: ماندن نسخه‌های بدون وصلهٔ امنیتی در منابع و قطع ناگهانی منبع شواهد. این **مشاورهٔ حقوقی نیست** ([باز Q-24]) | پلتفرم هر منبع را قابل حذف طراحی می‌کند (منبع `UNKNOWN`، نه شکست)؛ هیچ محصول تجاری جدید اتخاذ نمی‌شود ([ADR-0022](architecture-decision-records/ADR-0022-commercial-platforms-not-adopted.md))؛ معیار تحریم/دسترسی بسته در [ADR-0016](architecture-decision-records/ADR-0016-offline-deployment-and-artifacts.md) بند ۷؛ RR-06 برای منابع بدون وصله |
+| تعهدات AGPL (0.2) | **ریسک R-18:** Zabbix 7.0+ و Grafana OSS تحت AGPLv3 هستند. خواندن API یا اجرای بدون تغییر داخلی تعهد افشا ایجاد نمی‌کند؛ **تغییر** و ارائهٔ آن به کاربران از طریق شبکه، یا توزیع (مثلاً داخل bundle محصول برای بانک دیگر — Q-11) تعهد افشای سورس ایجاد می‌کند | پلتفرم Zabbix/Grafana را تغییر نمی‌دهد و درون artifact خود بسته‌بندی نمی‌کند (Grafana اختیاری، استقرار جدا، نسخهٔ بالادستی)؛ بررسی حقوقی [باز Q-21] پیش از استقرار Grafana یا هر plugin تغییر‌یافته |
 
 ## ۱۴. ریسک‌های باقیمانده
 
@@ -313,9 +329,19 @@ S=Spoofing، T=Tampering، R=Repudiation، I=Information disclosure، D=Denial o
 | RR-06 | وابستگی به امنیت سامانه‌های منبع (مثلاً ES بدون احراز هویت در نسخه‌های قدیمی) | خارج از کنترل پلتفرم | گزارش به مالک در EXP-02 |
 | RR-07 | الزامات قانونی نامعلوم ممکن است طراحی (retention، محل کلید، نوع MFA) را تغییر دهد | Q-10 باز | R-13 |
 | RR-08 | بار اضافی روی منابع در زمان حادثه (همان زمانی که evidence لازم است) | تقاضای هم‌زمان | budget و circuit breaker، R-15 |
+| RR-09 (0.2) | قطع منبع به‌دلیل انقضا/عدم تمدید مجوز (Splunk، SolarWinds) یا ماندن آن بدون وصلهٔ امنیتی | تحریم و مجوز خارج از کنترل پلتفرم | R-16، Q-25؛ fallback گزینهٔ B در [ADR-0021](architecture-decision-records/ADR-0021-build-buy-reuse-strategy.md) برای همان منبع |
+| RR-10 (0.2) | اگر همگام‌سازی تقویم به Zabbix فعال شود، حساب نوشتن سطح حمله را افزایش می‌دهد | ماهیت قابلیت | T-17، §۷.۳ |
 
 ## ۱۵. نکته برای بازبینی
 
 - **«نکته برای بازبینی» (محل توکنیزه‌سازی):** spine §6 redaction در لبه و ingest را الزامی کرده است، اما محل محاسبهٔ HMAC (لبه یا ingest) صریحاً تعیین نشده. توکنیزه‌سازی در لبه نشت کلید را به نودهای zone گسترش می‌دهد (RR-02)؛ توکنیزه‌سازی فقط در ingest یعنی مقدار خام کلید (نه PAN، ولی مثلاً RRN/STAN) از zone خارج می‌شود (روی mTLS). پیشنهاد: PAN همیشه در لبه توکنیزه یا حذف شود؛ سایر کلیدهای همبستگی غیرحساس‌تر می‌توانند در ingest توکنیزه شوند — تصمیم در ADR-0018.
-- **«نکته برای بازبینی» (ارقام فارسی):** detectorها باید ارقام فارسی و عربی-هندی را نرمال کنند؛ پیشنهاد افزودن این مورد به معیار پذیرش `NFR-PRV-002`.
+- **«نکته برای بازبینی» (ارقام فارسی):** detectorها باید ارقام فارسی و عربی-هندی را نرمال کنند (§۶.۲ اکنون مالک واحد این قاعده است)؛ پیشنهاد افزودن این مورد به معیار پذیرش `NFR-PRV-002`.
+- **«نکته برای بازبینی» (0.2):** شناسه‌های T-17/T-18 و RR-09/RR-10 جدیدند؛ R-16 و R-18 باید در ثبت ریسک مرکزی (roadmap) با همین معنا ثبت شوند.
 - **«نکته برای بازبینی» (Document ID):** شناسهٔ `ARC-SEC-001` توسط نویسنده انتخاب شده است.
+
+## ۱۶. تاریخچه تغییر
+
+| Version | Date | تغییر |
+|---|---|---|
+| 0.1 | 2026-10-11 | نسخه اولیه. |
+| 0.2 | 2026-10-12 | تغییر پس از Product Benchmark: ریسک تحریم/تداوم مجوز (R-16)، تعهدات AGPL (R-18)، نوشتن اختیاری در Zabbix به‌عنوان قابلیت ممتاز و audit‌شده (§۷.۳، T-17)، exporter MQ (T-18)، مالکیت واحد نرمال‌سازی ارقام فارسی پیش از detectorها. |

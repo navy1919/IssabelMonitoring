@@ -4,6 +4,8 @@
 |---|---|---|---|---|---|
 | ADR-0013 | analytics-staging-rules-statistics-ml | Proposed | Firm | 2026-10-11 (۱۴۰۵/۰۷/۱۹) | Architecture (pending product owner approval) |
 
+Version: `0.1`
+
 Related documents: [correlation-and-intelligence.md](../correlation-and-intelligence.md)، [quality-and-validation-strategy.md](../../testing/quality-and-validation-strategy.md)، [ADR-0012](ADR-0012-correlation-engine-design.md)
 
 ## Context
